@@ -375,7 +375,6 @@ namespace Parameters
       struct BoundaryConditions
       {
          typename MHDEquations<dim>::BoundaryKind kind;
-	 //typename EulerEquations<dim>::BoundaryKind kind;
          
          dealii::FunctionParser<dim> values;
          

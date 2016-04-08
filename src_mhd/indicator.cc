@@ -30,8 +30,8 @@ void ConservationLaw<dim>::compute_shock_indicator ()
 template <int dim>
 void ConservationLaw<dim>::compute_shock_indicator_kxrcf ()
 {
-   const unsigned int density_component = EulerEquations<dim>::density_component;
-   const unsigned int energy_component = EulerEquations<dim>::energy_component;
+   const unsigned int density_component = MHDEquations<dim>::density_component;
+   const unsigned int energy_component = MHDEquations<dim>::energy_component;
    
    QGauss<dim-1> quadrature(fe.degree + 1);
    FEFaceValues<dim> fe_face_values (mapping(), fe, quadrature,

@@ -44,13 +44,11 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    // Compute conserved variable and its gradients at all quadrature points
    Table<2,double>
       W (n_q_points, MHDEquations<dim>::n_components);
-      //W (n_q_points, EulerEquations<dim>::n_components);
    
    /*Table<3,double>
       grad_W (n_q_points, EulerEquations<dim>::n_components, dim);*/
 
    // Compute cartesian components of flux
-   //typedef double FluxMatrix[EulerEquations<dim>::n_components][dim];
    typedef double FluxMatrix[MHDEquations<dim>::n_components][dim];
    FluxMatrix *flux = new FluxMatrix[n_q_points];
    
@@ -58,13 +56,11 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    parameters.external_force.vector_value_list(fe_v.get_quadrature_points(),
                                                ext_force_values);
    
-   //typedef double ForcingVector[EulerEquations<dim>::n_components];
-   typedef double ForcingVector[MHDEquations<dim>::n_components];
+  typedef double ForcingVector[MHDEquations<dim>::n_components];
    ForcingVector *forcing = new ForcingVector[n_q_points];
    
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
       for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
       {
          W[q][c] = 0.0;
@@ -85,8 +81,6 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
       
       MHDEquations<dim>::compute_flux_matrix (W[q], flux[q]);
       MHDEquations<dim>::compute_forcing_vector (W[q], ext_force_values[q], forcing[q]);
-      //EulerEquations<dim>::compute_flux_matrix (W[q], flux[q]);
-      //EulerEquations<dim>::compute_forcing_vector (W[q], ext_force_values[q], forcing[q]);
    }
    
    
@@ -158,8 +152,6 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
    Table<2,double>
       Wplus  (n_q_points, MHDEquations<dim>::n_components),
       Wminus (n_q_points, MHDEquations<dim>::n_components);
-      //Wplus  (n_q_points, EulerEquations<dim>::n_components),
-      //Wminus (n_q_points, EulerEquations<dim>::n_components);
 
    /*Table<3,double>
       grad_Wplus  (n_q_points, EulerEquations<dim>::n_components, dim);*/
@@ -171,9 +163,16 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
            ExcIndexRange (boundary_id, 0,
                           Parameters::AllParameters<dim>::max_n_boundaries));
    
-   //typename EulerEquations<dim>::BoundaryKind boundary_kind =
+   std::vector<Vector<double> >
+   boundary_values(n_q_points, Vector<double>(MHDEquations<dim>::n_components));
+   parameters.boundary_conditions[boundary_id]
+   .values.vector_value_list(fe_v.get_quadrature_points(),
+                             boundary_values);
+   
+   
    typename MHDEquations<dim>::BoundaryKind boundary_kind =
    parameters.boundary_conditions[boundary_id].kind;
+   
    
    // Compute numerical flux at all quadrature points
    typedef double NormalFlux[MHDEquations<dim>::n_components];
@@ -184,7 +183,7 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
    //****************************************************
    
    typename MHDEquations<dim>::BoundaryKind boundCheck = MHDEquations<dim>::periodic;
-   if((boundary_kind==boundCheck)) //&&(parameters.is_periodic)
+   if((boundary_kind==boundCheck))
    {
       // Find the neighbouring cell via map.find(key) and store the face_pair
       FacePair<dim,dim> face_pair;
@@ -262,7 +261,6 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
    {
    
    std::vector<Vector<double> >
-   //boundary_values(n_q_points, Vector<double>(EulerEquations<dim>::n_components));
    boundary_values(n_q_points, Vector<double>(MHDEquations<dim>::n_components));
    parameters.boundary_conditions[boundary_id]
    .values.vector_value_list(fe_v.get_quadrature_points(),
@@ -270,7 +268,6 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
 
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
       for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
       {
          Wplus[q][c] = 0.0;
@@ -288,7 +285,6 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
                                    fe_v.shape_grad_component(i, q, c)[d];*/
       }
       
-      //EulerEquations<dim>::compute_Wminus (boundary_kind,
       MHDEquations<dim>::compute_Wminus (boundary_kind,
                                            fe_v.normal_vector(q),
                                            Wplus[q],
@@ -297,14 +293,11 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
 
       // Apply bc on cell average also. This part is bit ugly.
       Table<2,double> avg (2, MHDEquations<dim>::n_components);
-      //Table<2,double> avg (2, EulerEquations<dim>::n_components);
-      //for(unsigned int ic=0; ic<EulerEquations<dim>::n_components; ++ic)
       for(unsigned int ic=0; ic<MHDEquations<dim>::n_components; ++ic)
       {
          avg[0][ic] = cell_average[cell_no][ic];
          avg[1][ic] = cell_average[cell_no][ic];
       }
-      //EulerEquations<dim>::compute_Wminus (boundary_kind,
       MHDEquations<dim>::compute_Wminus (boundary_kind,
                                            fe_v.normal_vector(q),
                                            avg[0],
@@ -312,9 +305,6 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
                                            avg[1]);
       Vector<double> Aplus (MHDEquations<dim>::n_components);
       Vector<double> Aminus(MHDEquations<dim>::n_components);
-      //Vector<double> Aplus (EulerEquations<dim>::n_components);
-      //Vector<double> Aminus(EulerEquations<dim>::n_components);
-      //for(unsigned int ic=0; ic<EulerEquations<dim>::n_components; ++ic)
       for(unsigned int ic=0; ic<MHDEquations<dim>::n_components; ++ic)
       {
          Aplus[ic]  = avg[0][ic];
@@ -416,22 +406,18 @@ void ConservationLaw<dim>::integrate_face_term_explicit
    Table<2,double>
       Wplus  (n_q_points, MHDEquations<dim>::n_components),
       Wminus (n_q_points, MHDEquations<dim>::n_components);
-      //Wplus  (n_q_points, EulerEquations<dim>::n_components),
-      //Wminus (n_q_points, EulerEquations<dim>::n_components);
 
    /*Table<3,double>
       grad_Wplus  (n_q_points, EulerEquations<dim>::n_components, dim),
       grad_Wminus (n_q_points, EulerEquations<dim>::n_components, dim);*/
 
    // Compute numerical flux at all quadrature points
-   //typedef double NormalFlux[EulerEquations<dim>::n_components];
    typedef double NormalFlux[MHDEquations<dim>::n_components];
    NormalFlux *normal_fluxes = new NormalFlux[n_q_points];
    
    // Wminus is Neighbouring cell value
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
       for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
       {
          Wplus[q][c] = 0.0;
