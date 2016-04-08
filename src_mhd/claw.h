@@ -9,7 +9,6 @@
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/timer.h>
 
-#include <deal.II/lac/parallel_vector.h>
 #include <deal.II/lac/vector.h>
 #include <deal.II/lac/parallel_vector.h>
 
@@ -37,6 +36,8 @@
 #include "parameters.h"
 #include "integrator.h"
 
+#include"DealiiExtensions.h"
+
 using namespace dealii;
 
 namespace LA
@@ -51,26 +52,44 @@ template <int dim>
 struct PosLimData
 {
    PosLimData(const dealii::FESystem<dim>    &fe,
-              const dealii::Mapping<dim,dim> &mapping);
-   dealii::QGaussLobatto<dim>  quadrature_formula;
+              const dealii::Mapping<dim,dim> &mapping,
+              const std::pair<unsigned int,unsigned int> &local_range);
+   unsigned int ngll;
+   
+   dealii::Quadrature<dim> quadrature_x;
+   dealii::Quadrature<dim> quadrature_y;
+   //dealii::Quadrature<dim> quadrature_z;
+
    unsigned int n_q_points;
-   dealii::FEValues<dim> fe_values;
+   
+   dealii::FEValues<dim> fe_values_x;
+   dealii::FEValues<dim> fe_values_y;
+   //dealii::FEValues<dim> fe_values_z;
+
    std::vector<double> density_values, energy_values;
    std::vector< Tensor<1,dim> > momentum_values;
+
    std::vector<unsigned int> local_dof_indices;
+   std::pair<unsigned int, unsigned int> local_range;
 };
 
 template <int dim>
 PosLimData<dim>::PosLimData(const dealii::FESystem<dim>    &fe,
-                            const dealii::Mapping<dim,dim> &mapping)
+                            const dealii::Mapping<dim,dim> &mapping,
+                            const std::pair<unsigned int,unsigned int> &local_range)
 :
-   quadrature_formula (fe.degree+2),
-   n_q_points (quadrature_formula.size()),
-   fe_values (mapping, fe, quadrature_formula, update_values),
+   ngll ((fe.degree+3)%2==0 ? (fe.degree+3)/2 : (fe.degree+4)/2),
+   quadrature_x (QGaussLobatto<1>(ngll), QGauss<1>(fe.degree+1)),
+   quadrature_y (QGauss<1>(fe.degree+1), QGaussLobatto<1>(ngll)),
+   n_q_points (quadrature_x.size()),
+   fe_values_x (mapping, fe, quadrature_x, update_values),
+   fe_values_y (mapping, fe, quadrature_y, update_values),
+   //fe_values_z (mapping, fe, quadrature_z, update_values),
    density_values (n_q_points),
    energy_values (n_q_points),
    momentum_values (n_q_points),
-   local_dof_indices (fe.dofs_per_cell)
+   local_dof_indices (fe.dofs_per_cell),
+   local_range (local_range)
 {
    
 }
@@ -101,16 +120,19 @@ class ConservationLaw
 {
 public:
    ConservationLaw (const char *input_filename,
-                    //const unsigned int degree,
+                    const unsigned int degree,
                     const dealii::FE_DGQArbitraryNodes<dim> &fe_scalar);
    ConservationLaw (const char *input_filename,
-                    //const unsigned int degree,
+                    const unsigned int degree,
                     const dealii::FE_DGP<dim> &fe_scalar);
    void run ();
    
 private:
 
    void read_parameters (const char *file_name);
+   
+   void configure_periodic_boundary();
+   
    const Mapping<dim,dim>& mapping() const;
    void compute_cartesian_mesh_size ();
    void compute_inv_mass_matrix();
@@ -122,7 +144,7 @@ private:
    void set_initial_condition_Qk ();
    void set_initial_condition_Pk ();
    
-   std::pair<unsigned int, double> solve (LA::Vector<double> &solution); //, double current_residual);
+   std::pair<unsigned int, double> solve (LA::Vector<double> &solution, double current_residual);
    
    void compute_refinement_indicators (Vector<double> &indicator) const;
    void refine_grid (const Vector<double> &indicator);
@@ -157,6 +179,7 @@ private:
    void apply_limiter ();
    void apply_limiter_TVB_Qk ();
    void apply_limiter_TVB_Pk ();
+   void apply_limiter_minmax_Qk ();
    void apply_positivity_limiter ();
    void apply_positivity_limiter_cell
       (typename DoFHandler<dim>::active_cell_iterator& cell,
@@ -213,6 +236,9 @@ private:
    // Iterators to neighbouring cells
    std::vector<typename dealii::DoFHandler<dim>::cell_iterator>
          lcell, rcell, bcell, tcell;
+
+   //	Create a PeriodicCellMap object in case we have of periodic boudary conditions
+   PeriodicCellMap<dim> periodic_map;
    
    // Next come a number of data
    // vectors that correspond to the
@@ -283,7 +309,7 @@ private:
    std::vector< dealii::Vector<double> > inv_mass_matrix;
    
    Parameters::AllParameters<dim>  parameters;
-   dealii::ConditionalOStream		       pcout;
+   dealii::ConditionalOStream      pcout;
    TimerOutput                     computing_timer;
 
    // Call the appropriate numerical flux function
@@ -291,19 +317,22 @@ private:
    inline
    void numerical_normal_flux 
    (
-      const dealii::Tensor<1,dim, double> &normal,
-      //const dealii::Point<dim>         &normal,
+      //const dealii::Tensor<1,dim, double> &normal,
+      const dealii::Tensor<1,dim>      &normal,
       const InputVector                &Wplus,
       const InputVector                &Wminus,
       const dealii::Vector<double>     &Aplus,
       const dealii::Vector<double>     &Aminus,
-      typename InputVector::value_type (&normal_flux)[EulerEquations<dim>::n_components]
+      typename InputVector::value_type (&normal_flux)[MHDEquations<dim>::n_components]
+      //typename InputVector::value_type (&normal_flux)[EulerEquations<dim>::n_components]
+
    ) const
    {
       switch(parameters.flux_type)
       {
          case Parameters::Flux::lxf:
-            EulerEquations<dim>::lxf_flux (normal,
+            MHDEquations<dim>::lxf_flux (normal,
+	    //EulerEquations<dim>::lxf_flux (normal,
                                            Wplus,
                                            Wminus,
                                            Aplus,
@@ -311,7 +340,7 @@ private:
                                            normal_flux);
             break;
 
-         case Parameters::Flux::sw:
+         /*case Parameters::Flux::sw:
             EulerEquations<dim>::steger_warming_flux (normal,
                                                       Wplus,
                                                       Wminus,
@@ -338,6 +367,15 @@ private:
                                             Wminus,
                                             normal_flux);
             break;
+            
+         case Parameters::Flux::kep:
+            EulerEquations<dim>::kep_flux (normal,
+                                           Wplus,
+                                           Wminus,
+                                           Aplus,
+                                           Aminus,
+                                           normal_flux);
+            break;//*/
 
 	      default:
             Assert (false, dealii::ExcNotImplemented());
@@ -362,19 +400,21 @@ private:
       if(cell->active())
       {
          unsigned int cell_no = cell_number(cell);
-         for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+	 //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+         for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
             avg(c) = cell_average[cell_no][c];
       }
       else
       {  // compute average solution on child cells
-         auto child_cells =
+         std::vector<typename dealii::DoFHandler<dim>::active_cell_iterator> child_cells =
             dealii::GridTools::get_active_child_cells< dealii::DoFHandler<dim> > (cell);
          avg = 0;
          double measure = 0;
          for(unsigned int i=0; i<child_cells.size(); ++i)
          {
             unsigned int child_cell_no = cell_number(child_cells[i]);
-            for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+            //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+	    for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
                avg(c) += cell_average[child_cell_no][c] * child_cells[i]->measure();
             measure += child_cells[i]->measure();
          }

@@ -13,6 +13,7 @@
 #include <deal.II/grid/tria_iterator.h>
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/tria_boundary_lib.h>
+#include <deal.II/grid/grid_tools.h>
 
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_accessor.h>
@@ -20,6 +21,7 @@
 
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/mapping_q.h>
 #include <deal.II/fe/mapping_q1.h>
 #include <deal.II/fe/mapping_cartesian.h>
 #include <deal.II/fe/fe_dgq.h>
@@ -28,6 +30,8 @@
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/solution_transfer.h>
 #include <deal.II/numerics/matrix_tools.h>
+
+#include <deal.II/algorithms/any_data.h>
 
 #include <iostream>
 #include <fstream>
@@ -54,12 +58,13 @@ using namespace dealii;
 //------------------------------------------------------------------------------
 template <int dim>
 ConservationLaw<dim>::ConservationLaw (const char *input_filename,
-                                       //const unsigned int degree,
+                                       const unsigned int degree,
                                        const FE_DGQArbitraryNodes<dim> &fe_scalar)
    :
    mpi_communicator (MPI_COMM_WORLD),
    triangulation(mpi_communicator),
-   fe (fe_scalar, EulerEquations<dim>::n_components),
+   //fe (fe_scalar, EulerEquations<dim>::n_components),
+   fe (fe_scalar, MHDEquations<dim>::n_components),
    dof_handler (triangulation),
    fe_cell (FE_DGQ<dim>(0)),
    dh_cell (triangulation),
@@ -76,12 +81,13 @@ ConservationLaw<dim>::ConservationLaw (const char *input_filename,
 //------------------------------------------------------------------------------
 template <int dim>
 ConservationLaw<dim>::ConservationLaw (const char *input_filename,
-                                       //const unsigned int degree,
+                                       const unsigned int degree,
                                        const FE_DGP<dim> &fe_scalar)
 :
    mpi_communicator (MPI_COMM_WORLD),
    triangulation(mpi_communicator),
-   fe (fe_scalar, EulerEquations<dim>::n_components),
+   //fe (fe_scalar, EulerEquations<dim>::n_components),
+   fe (fe_scalar, MHDEquations<dim>::n_components),
    dof_handler (triangulation),
    fe_cell (FE_DGQ<dim>(0)),
    dh_cell (triangulation),
@@ -112,7 +118,7 @@ void ConservationLaw<dim>::read_parameters (const char *input_filename)
    // Create directory to save solution files
    if(Utilities::MPI::this_mpi_process(mpi_communicator)==0)
    {
-      //system("mkdir -p output");
+      system("mkdir -p output");
       
       // Save all parameters in xml format
       //std::ofstream xml_file ("input.xml");
@@ -144,6 +150,68 @@ void ConservationLaw<dim>::read_parameters (const char *input_filename)
    }
 }
 
+/******************************************************************************************
+ * 	Configure the periodic boundaries
+ ******************************************************************************************/
+
+template <int dim>
+void ConservationLaw<dim>::configure_periodic_boundary()
+{
+   std::cout<<"\n\t Configuring boundary conditions \n";
+
+     
+     //	Create periodicity vector to store the periodic info.
+     std::vector<dealii::GridTools::PeriodicFacePair<
+		 typename dealii::parallel::distributed
+			  ::Triangulation<dim>::cell_iterator > >
+					periodicity_vector;
+
+   for(unsigned int i=0; i<parameters.periodic_pair.size();++i)
+   {
+     //	Read boundary pair from the input parameters
+     std::pair<dealii::types::boundary_id,dealii::types::boundary_id> boundary_pair = parameters.periodic_pair[i];
+     unsigned int bp_first =boundary_pair.first, bp_second=boundary_pair.second;
+     std::cout<<"\n\t Collecting Periodic faces for Boundary pair ("
+	      <<bp_first<<","<<bp_second<<")\n";
+
+     unsigned int direction=parameters.directions[i];
+     //	Create periodicity with collect_periodic_faces
+     dealii::GridTools::collect_periodic_faces(triangulation,
+				       boundary_pair.first,
+				       boundary_pair.second,
+				       direction,
+				       periodicity_vector);
+   }
+   //	Add the periodic information to the triangulation
+   std::cout<<"\n\t Adding periodicity to the triangulation \n";
+   triangulation.add_periodicity(periodicity_vector);
+   
+   std::cout<<"\n\t Distributing degrees of freedom \n";
+   dof_handler.clear();
+   dof_handler.distribute_dofs (fe);
+   locally_owned_dofs = dof_handler.locally_owned_dofs ();
+   DoFTools::extract_locally_relevant_dofs (dof_handler,
+                                            locally_relevant_dofs);
+   
+   for(unsigned int i=0; i<parameters.periodic_pair.size();++i)
+   {
+     //	Read boundary pair from the input parameters
+     std::pair<dealii::types::boundary_id,dealii::types::boundary_id> boundary_pair = parameters.periodic_pair[i];
+     // Map to identify cells in both sides of the boundary
+     unsigned int bp_first =boundary_pair.first, bp_second=boundary_pair.second;
+     std::cout<<"\n\t Building periodicity map for Boundary pair ("<<bp_first<<","<<bp_second<<")\n";
+     
+     unsigned int direction=parameters.directions[i];
+     DealIIExtensions::make_periodicity_map_dg<dealii::DoFHandler<dim>>(dof_handler,
+									boundary_pair.first,
+									boundary_pair.second,
+									direction,
+									periodic_map);
+     }
+}
+/******************************************************************************************/
+
+
 //------------------------------------------------------------------------------
 // Return mapping type based on selected type
 //------------------------------------------------------------------------------
@@ -157,7 +225,7 @@ const Mapping<dim,dim>& ConservationLaw<dim>::mapping() const
    }
    else if(parameters.mapping_type == Parameters::AllParameters<dim>::q2)
    {
-      static MappingQ<dim> m(2);
+      static MappingQ<dim, dim> m(2);
       return m;
    }
    else if(parameters.mapping_type == Parameters::AllParameters<dim>::cartesian)
@@ -181,7 +249,7 @@ const Mapping<dim,dim>& ConservationLaw<dim>::mapping() const
 template <int dim>
 void ConservationLaw<dim>::compute_cartesian_mesh_size ()
 {
-   const double geom_tol = 1.0e-12;
+   const double geom_tol = 1.0e-10;
    
    typename DoFHandler<dim>::active_cell_iterator
       cell = dof_handler.begin_active(),
@@ -242,6 +310,8 @@ void ConservationLaw<dim>::compute_inv_mass_matrix ()
                                      fe_values.shape_value(i,q) *
                                      fe_values.JxW(q);
          inv_mass_matrix[c][i] = 1.0 / inv_mass_matrix[c][i];
+	 if(isnan(inv_mass_matrix[c][i]))
+	   std::cout<<"\n NaN detected! cell: "<< c << "\n";
       }
    }
 }
@@ -261,7 +331,7 @@ void ConservationLaw<dim>::setup_system ()
 {
    TimerOutput::Scope t(computing_timer, "Setup");
 
-   //pcout << "Allocating memory ...\n";
+   pcout << "Allocating memory ...\n";
    
    dof_handler.clear();
    dof_handler.distribute_dofs (fe);
@@ -271,14 +341,15 @@ void ConservationLaw<dim>::setup_system ()
                                             locally_relevant_dofs);
    
    // Size all of the fields.
-   current_solution.reinit  (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-   right_hand_side.reinit   (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
    old_solution.reinit 		(locally_owned_dofs, mpi_communicator);
-   predictor.reinit 		(locally_owned_dofs, mpi_communicator);
+   current_solution.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+   predictor.reinit 		   (locally_owned_dofs, mpi_communicator);
+   right_hand_side.reinit 	(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
    newton_update.reinit 	(locally_owned_dofs, mpi_communicator);
    
    cell_average.resize 		(triangulation.n_active_cells(),
-							       Vector<double>(EulerEquations<dim>::n_components));
+							       Vector<double>(MHDEquations<dim>::n_components));
+							       //Vector<double>(EulerEquations<dim>::n_components));
    
    mu_shock.reinit 			(triangulation.n_active_cells());
    shock_indicator.reinit 	(triangulation.n_active_cells());
@@ -314,7 +385,7 @@ void ConservationLaw<dim>::setup_system ()
    bcell.resize(triangulation.n_active_cells());
    tcell.resize(triangulation.n_active_cells());
 
-   //const double EPS = 1.0e-10;
+   const double EPS = 1.0e-10;
    typename DoFHandler<dim>::active_cell_iterator
       cell = dh_cell.begin_active(),
       endc = dh_cell.end();
@@ -335,8 +406,7 @@ void ConservationLaw<dim>::setup_system ()
                neighbor = cell->neighbor(face_no);
             Assert(neighbor->level() == cell->level() || neighbor->level() == cell->level()-1,
                    ExcInternalError());
-            Tensor<1,dim, double> dr = neighbor->center() - cell->center();
-	    //Point<dim> dr = neighbor->center() - cell->center();
+            Tensor<1,dim> dr = neighbor->center() - cell->center();
             if(dr[0] < -0.5*dx)
                lcell[c] = neighbor;
             else if(dr[0] > 0.5*dx)
@@ -349,7 +419,6 @@ void ConservationLaw<dim>::setup_system ()
             {
                std::cout << "Did not find all neighbours\n";
                std::cout << "dx, dy = " << dr[0] << "  " << dr[1] << std::endl;
-               //std::cout << "dx, dy = " << dr(0) << "  " << dr(1) << std::endl;
                exit(0);
             }
          }
@@ -371,14 +440,15 @@ void ConservationLaw<dim>::setup_mesh_worker (IntegratorExplicit<dim>& integrato
                                                    n_gauss_points);
    
    integrator.info_box.initialize_update_flags   ();
-   integrator.info_box.add_update_flags_all 	    (update_values | update_JxW_values);
+   integrator.info_box.add_update_flags_all (update_values | 
+					     update_quadrature_points |
+					     update_JxW_values);
    integrator.info_box.add_update_flags_cell     (update_gradients);
    integrator.info_box.add_update_flags_boundary (update_normal_vectors | update_quadrature_points);
    integrator.info_box.add_update_flags_face     (update_normal_vectors);
    
    integrator.info_box.initialize (fe, mapping());
    
-   //NamedData< LA::Vector<double>* > rhs;
    AnyData rhs;
    LA::Vector<double>* data = &right_hand_side;
    rhs.add< LA::Vector<double>* > (data, "RHS");
@@ -448,8 +518,10 @@ ConservationLaw<dim>::compute_time_step_cartesian ()
    {
       const unsigned int c = cell_number (cell);
       const double h = cell->diameter() / std::sqrt(1.0*dim);
-      const double sonic = EulerEquations<dim>::sound_speed(cell_average[c]);
-      const double density = cell_average[c][EulerEquations<dim>::density_component];
+      //const double sonic = EulerEquations<dim>::sound_speed(cell_average[c]);
+      //const double density = cell_average[c][EulerEquations<dim>::density_component];
+      const double sonic = MHDEquations<dim>::sound_speed(cell_average[c]);
+      const double density = cell_average[c][MHDEquations<dim>::density_component];
       
       double max_eigenvalue = 0.0;
       for (unsigned int d=0; d<dim; ++d)
@@ -480,7 +552,8 @@ ConservationLaw<dim>::compute_time_step_q ()
                             quadrature_formula,
                             update_values);
    std::vector<Vector<double> > solution_values(n_q_points,
-                                                Vector<double>(EulerEquations<dim>::n_components));
+                                                Vector<double>(MHDEquations<dim>::n_components));
+						//Vector<double>(EulerEquations<dim>::n_components));
 
                                                    
    typename DoFHandler<dim>::active_cell_iterator
@@ -499,7 +572,8 @@ ConservationLaw<dim>::compute_time_step_q ()
       for (unsigned int q=0; q<n_q_points; ++q)
       {
          max_eigenvalue = std::max(max_eigenvalue,
-                                   EulerEquations<dim>::max_eigenvalue (solution_values[q]));
+				   MHDEquations<dim>::max_eigenvalue (solution_values[q]));
+                                   //EulerEquations<dim>::max_eigenvalue (solution_values[q]));
       }
       
       const unsigned int c = cell_number (cell);
@@ -528,7 +602,8 @@ ConservationLaw<dim>::compute_cell_average ()
                             quadrature_formula,
                             update_values | update_JxW_values);
    std::vector<Vector<double> > solution_values(n_q_points,
-                                                Vector<double>(EulerEquations<dim>::n_components));
+                                                Vector<double>(MHDEquations<dim>::n_components));
+						//Vector<double>(EulerEquations<dim>::n_components));
                                                 
    typename DoFHandler<dim>::active_cell_iterator
       cell = dof_handler.begin_active(),
@@ -546,10 +621,16 @@ ConservationLaw<dim>::compute_cell_average ()
          cell_average[cell_no] = 0.0;
          
          for (unsigned int q=0; q<n_q_points; ++q)
-            for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+	    for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
+            //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+	    {
                cell_average[cell_no][c] += solution_values[q][c] * fe_values.JxW(q);
+	    }
          
          cell_average[cell_no] /= cell->measure();
+	 if((cell_average[cell_no][dim]>1e-10)||(cell_average[cell_no][dim+1]>1e-10))
+	   std::cout<<"\n \t Average not zero in cell number bx="<< cell_average[cell_no][dim] << "\t by="<<cell_average[cell_no][dim+1] ;
+	 
       }
    }
 }
@@ -609,9 +690,12 @@ ConservationLaw<dim>::compute_angular_momentum ()
 //------------------------------------------------------------------------------
 template <int dim>
 std::pair<unsigned int, double>
-ConservationLaw<dim>::solve (LA::Vector<double> &newton_update)// , double              current_residual)
+ConservationLaw<dim>::solve (LA::Vector<double> &newton_update,
+                             double              current_residual)
 {
    TimerOutput::Scope t(computing_timer, "Solve");
+   
+   std::pair<unsigned int,unsigned int> local_range = newton_update.local_range();
    
    std::vector<unsigned int> dof_indices(fe.dofs_per_cell);
    typename DoFHandler<dim>::active_cell_iterator
@@ -624,9 +708,12 @@ ConservationLaw<dim>::solve (LA::Vector<double> &newton_update)// , double      
          
          cell->get_dof_indices (dof_indices);
          for(unsigned int i=0; i<fe.dofs_per_cell; ++i)
-            newton_update(dof_indices[i]) = dt(cell_no) *
-                                            right_hand_side(dof_indices[i]) *
-                                            inv_mass_matrix[cell_no][i];
+         {
+            unsigned int i_loc = dof_indices[i] - local_range.first;
+            newton_update.local_element(i_loc) = dt(cell_no) *
+                                                 right_hand_side.local_element(i_loc) *
+                                                 inv_mass_matrix[cell_no][i];
+         }
       }
    return std::pair<unsigned int, double> (0,0);
 }
@@ -653,10 +740,15 @@ void ConservationLaw<dim>::iterate_explicit (IntegratorExplicit<dim>& integrator
       
       assemble_system (integrator);
       
+      /*for(unsigned int i = 0; i < right_hand_side.size(); i++)
+	if(isnan(right_hand_side(i)))
+	  std::cout<<"\n \t NaN at the RHS vector, position :" << i << "\n";//*/
+      
       res_norm = right_hand_side.l2_norm();
       if(rk == 0) res_norm0 = res_norm;
       
-      //std::pair<unsigned int, double> convergence = solve (newton_update, res_norm);
+      std::pair<unsigned int, double> convergence
+         = solve (newton_update, res_norm);
       
       {
          TimerOutput::Scope t(computing_timer, "RK update");
@@ -693,6 +785,9 @@ void ConservationLaw<dim>::iterate_explicit (IntegratorExplicit<dim>& integrator
 template <int dim>
 void ConservationLaw<dim>::run ()
 {
+   Timer timer_all;
+   timer_all.start();
+   
    {
       GridIn<dim> grid_in;
       grid_in.attach_triangulation(triangulation);
@@ -705,6 +800,10 @@ void ConservationLaw<dim>::run ()
       else if(parameters.mesh_type == "gmsh")
          grid_in.read_msh(input_file);
    }
+   
+   // Set periodic boundary conditions
+   if(parameters.is_periodic)
+     configure_periodic_boundary();
    
 //   {
 //      // Use this refine around corner in forward step
@@ -760,6 +859,9 @@ void ConservationLaw<dim>::run ()
    IntegratorExplicit<dim> integrator_explicit (dof_handler);
    setup_mesh_worker (integrator_explicit);
    
+   Timer timer_iterations;
+   timer_iterations.start ();
+   
    while (elapsed_time < parameters.final_time)
    {
       // compute time step in each cell using cfl condition
@@ -771,7 +873,7 @@ void ConservationLaw<dim>::run ()
             << ", cfl = " << std::setprecision(2) << parameters.cfl
             << std::endl;
       
-      //unsigned int nonlin_iter = 0;
+      unsigned int nonlin_iter = 0;
       double res_norm0 = 1.0;
       double res_norm  = 1.0;
 
@@ -805,7 +907,7 @@ void ConservationLaw<dim>::run ()
          
          refine_grid(refinement_indicators);
          
-         //newton_update.reinit (locally_owned_dofs, mpi_communicator);
+         newton_update.reinit (locally_owned_dofs, mpi_communicator);
 
          next_refine_time = elapsed_time + parameters.refine_time_step;
          next_refine_iter = time_iter + parameters.refine_iter_step;
@@ -815,6 +917,15 @@ void ConservationLaw<dim>::run ()
          //parameters.cfl = 1.2;
       }
    }
+   
+   timer_iterations.stop ();
+   timer_all.stop ();
+   
+   pcout << std::endl;
+   pcout << "Elapsed CPU time  (iter): " << timer_iterations()/60 << " min.\n";
+   pcout << "Elapsed wall time (iter): " << timer_iterations.wall_time()/60 << " min.\n";
+   pcout << "Elapsed CPU time  (all) : " << timer_all()/60 << " min.\n";
+   pcout << "Elapsed wall time (all) : " << timer_all.wall_time()/60 << " min.\n";
    
    computing_timer.print_summary ();
    computing_timer.reset ();

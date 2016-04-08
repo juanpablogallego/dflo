@@ -311,6 +311,7 @@ namespace Parameters
    template <int dim>
    AllParameters<dim>::AllParameters ()
    :
+   external_force (dim),
    initial_conditions (EulerEquations<dim>::n_components)
    {}
    
@@ -351,6 +352,12 @@ namespace Parameters
                         Patterns::Double(0.0),
                         "gravitational force");
       
+      // Components of external force
+      for(int d=0; d<dim; ++d)
+         prm.declare_entry("f_" + Utilities::int_to_string(d) +
+                           " value", "0.0",
+                           Patterns::Anything(),
+                           "expression in x,y,z");
       
       prm.enter_subsection("time stepping");
       {
@@ -387,8 +394,8 @@ namespace Parameters
                               Utilities::int_to_string(b));
          {
             prm.declare_entry("type", "outflow",
-                              Patterns::Selection("slip|inflow|outflow|pressure|farfield"),
-                              "<slip|inflow|outflow|pressure|farfield>");
+                              Patterns::Selection("slip|inflow|outflow|pressure|farfield|periodic"),
+                              "<slip|inflow|outflow|pressure|farfield|periodic>");
             
             for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
             {
@@ -397,6 +404,10 @@ namespace Parameters
                                  Patterns::Anything(),
                                  "expression in x,y,z");
             }
+            prm.declare_entry("pair", "0", Patterns::Integer(),
+			      "Boundary pair in case of periodic boundary conditions");
+	    prm.declare_entry("direction", "x", Patterns::Selection("x|y"),
+			      "Direction of the periodic boundary");
          }
          prm.leave_subsection();
       }
@@ -474,6 +485,17 @@ namespace Parameters
       std::string variables = "x,y,t";
       if(dim==3) variables = "x,y,z,t";
       
+      // External force
+      std::vector<std::string> force_expressions(dim, "0.0");
+      for(unsigned int d=0; d<dim; ++d)
+         force_expressions[d] = prm.get("f_" + Utilities::int_to_string(d) +
+                                        " value");
+      external_force.initialize(variables,
+                                force_expressions,
+                                std::map<std::string,double>(),
+                                true);
+      
+      // Boundary conditions
       for (unsigned int boundary_id=0; boundary_id<max_n_boundaries;
            ++boundary_id)
       {
@@ -498,7 +520,45 @@ namespace Parameters
                = EulerEquations<dim>::outflow_boundary;
             else if (boundary_type == "farfield")
                boundary_conditions[boundary_id].kind
-               = EulerEquations<dim>::farfield_boundary;
+	       = EulerEquations<dim>::farfield_boundary;
+            else if (boundary_type == "periodic")
+	    {
+	      boundary_conditions[boundary_id].kind
+		  = EulerEquations<dim>::periodic;
+	      is_periodic=true;
+	      
+	      std::pair<dealii::types::boundary_id,dealii::types::boundary_id> boundary_pair;
+	      boundary_pair.first = boundary_id;
+	      boundary_pair.second = prm.get_integer("pair");
+	      direction = prm.get("direction");
+	      
+	      unsigned int dir_int=0;
+	      if(direction=="y")
+		dir_int=1;
+	      
+	      // Check if the pair already exists
+	      if(periodic_pair.size()==0)
+	      {
+		periodic_pair.push_back(boundary_pair);
+		directions.push_back(dir_int);
+	      }
+	      else{
+		std::pair<dealii::types::boundary_id,dealii::types::boundary_id> tmp_pair (boundary_pair.second, boundary_pair.first),
+				   tmp_pair1;
+		bool pair_flag = false;
+		for(unsigned int i=0; i<periodic_pair.size();++i)
+		{
+		  tmp_pair1 = periodic_pair[i];
+		  if(tmp_pair == tmp_pair1)
+		     pair_flag = true;
+		}
+		if(!pair_flag)
+		{
+		  periodic_pair.push_back(boundary_pair);
+		  directions.push_back(dir_int);
+		}
+	      }
+	    }
             else
                AssertThrow (false, ExcNotImplemented());
             

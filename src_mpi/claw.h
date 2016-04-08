@@ -9,7 +9,6 @@
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/timer.h>
 
-#include <deal.II/lac/parallel_vector.h>
 #include <deal.II/lac/vector.h>
 #include <deal.II/lac/parallel_vector.h>
 
@@ -36,6 +35,7 @@
 
 #include "parameters.h"
 #include "integrator.h"
+#include"DealiiExtensions.h"
 
 using namespace dealii;
 
@@ -126,6 +126,9 @@ public:
 private:
 
    void read_parameters (const char *file_name);
+   
+   void configure_periodic_boundary();
+   
    const Mapping<dim,dim>& mapping() const;
    void compute_cartesian_mesh_size ();
    void compute_inv_mass_matrix();
@@ -229,6 +232,9 @@ private:
    // Iterators to neighbouring cells
    std::vector<typename dealii::DoFHandler<dim>::cell_iterator>
          lcell, rcell, bcell, tcell;
+
+   //	Create a PeriodicCellMap object in case we have of periodic boudary conditions
+   PeriodicCellMap<dim> periodic_map;
    
    // Next come a number of data
    // vectors that correspond to the
@@ -299,7 +305,7 @@ private:
    std::vector< dealii::Vector<double> > inv_mass_matrix;
    
    Parameters::AllParameters<dim>  parameters;
-   dealii::ConditionalOStream		       pcout;
+   dealii::ConditionalOStream      pcout;
    TimerOutput                     computing_timer;
 
    // Call the appropriate numerical flux function
@@ -307,8 +313,7 @@ private:
    inline
    void numerical_normal_flux 
    (
-      const dealii::Tensor<1, dim, double> &normal,
-      //const dealii::Point<dim>         &normal,
+      const dealii::Tensor<1,dim>      &normal,
       const InputVector                &Wplus,
       const InputVector                &Wminus,
       const dealii::Vector<double>     &Aplus,

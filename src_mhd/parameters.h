@@ -162,8 +162,8 @@ namespace Parameters
       enum  OutputType { quiet, verbose };
       OutputType output;
       
-      enum System_Equation {euler, mhd};
-      System_Equation equation;
+      enum System_model {euler, mhd};
+      System_model model;
       
       double linear_residual;
       int max_iterations;
@@ -222,7 +222,7 @@ namespace Parameters
    // the current time step.
    struct Flux
    {
-      enum FluxType {lxf, sw, kfvs, roe, hllc};
+      enum FluxType {lxf, sw, kfvs, roe, hllc, kep};
       FluxType flux_type;
 
       enum StabilizationKind { constant, mesh_dependent };
@@ -236,7 +236,7 @@ namespace Parameters
    
    struct Limiter
    {
-      enum LimiterType { none, TVB };
+      enum LimiterType { none, TVB, minmax };
       enum ShockIndType { limiter, density, energy, u2 };
       
       LimiterType  limiter_type;
@@ -365,9 +365,17 @@ namespace Parameters
    {
       static const unsigned int max_n_boundaries = 10;
       
+      // In case of periodic boundary conditions
+      bool is_periodic = 0;
+      std::string direction;
+      std::vector<unsigned int> directions; 
+      std::vector<std::pair<dealii::types::boundary_id,dealii::types::boundary_id>> periodic_pair;
+      
+      
       struct BoundaryConditions
       {
-         typename EulerEquations<dim>::BoundaryKind kind;
+         typename MHDEquations<dim>::BoundaryKind kind;
+	 //typename EulerEquations<dim>::BoundaryKind kind;
          
          dealii::FunctionParser<dim> values;
          
@@ -381,6 +389,7 @@ namespace Parameters
       double diffusion_coef;
       
       double gravity;
+      dealii::FunctionParser<dim> external_force;
       
       unsigned int degree;
       enum BasisType { Qk, Pk };

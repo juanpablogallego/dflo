@@ -15,11 +15,11 @@ namespace Parameters
                            Patterns::Selection("quiet|verbose"),
                            "State whether output from solver runs should be printed. "
                            "Choices are <quiet|verbose>.");
-         prm.declare_entry("equation", "euler",
+         prm.declare_entry("model", "euler",
                            Patterns::Selection("euler|mhd"),
                            "Select the system of equations to solve "
                            "Choices are <euler|mhd>.");
-	 prm.declare_entry("method", "rk3",
+	     prm.declare_entry("method", "rk3",
                            Patterns::Selection("gmres|direct|umfpack|rk3|mood"),
                            "The kind of solver for the linear system. "
                            "Choices are <gmres|direct|umfpack|rk3|mood>.");
@@ -58,11 +58,11 @@ namespace Parameters
          if (op == "quiet")
             output = quiet;
 	 
-	 const std::string eq = prm.get("equation");
+	 const std::string eq = prm.get("model");
          if (eq == "euler")
-            equation = euler;
+            model = euler;
          if (eq == "mhd")
-            equation = mhd;
+            model = mhd;
          
          const std::string sv = prm.get("method");
          if (sv == "direct")
@@ -157,8 +157,8 @@ namespace Parameters
       prm.enter_subsection("flux");
       {
          prm.declare_entry("flux", "lxf",
-                           Patterns::Selection("lxf|sw|kfvs|roe|hllc"),
-                           "Numerical flux: lxf | sw | kfvs | roe | hllc");
+                           Patterns::Selection("lxf|sw|kfvs|roe|hllc|kep"),
+                           "Numerical flux: lxf | sw | kfvs | roe | hllc | kep");
          prm.declare_entry("stab", "mesh",
                            Patterns::Selection("constant|mesh"),
                            "Whether to use a constant stabilization parameter or "
@@ -186,6 +186,8 @@ namespace Parameters
             flux_type = roe;
          else if(flux == "hllc")
             flux_type = hllc;
+         else if(flux == "kep")
+            flux_type = kep;
          else
             AssertThrow (false, ExcNotImplemented());
 
@@ -210,8 +212,8 @@ namespace Parameters
                            Patterns::Selection("limiter|density|energy|u2"),
                            "Shock indicator type: limiter | density | energy | u2");
          prm.declare_entry("type", "none",
-                           Patterns::Selection("none|TVB"),
-                           "Limiter type: none | TVB");
+                           Patterns::Selection("none|TVB|minmax"),
+                           "Limiter type: none | TVB | minmax");
          prm.declare_entry("characteristic limiter", "false",
                            Patterns::Bool(),
                            "whether to use characteristic limiter");
@@ -253,6 +255,8 @@ namespace Parameters
             limiter_type = none;
          else if(type == "TVB")
             limiter_type = TVB;
+         else if(type == "minmax")
+            limiter_type = minmax;
          else
             AssertThrow (false, ExcNotImplemented());
          
@@ -310,14 +314,17 @@ namespace Parameters
    template <int dim>
    AllParameters<dim>::BoundaryConditions::BoundaryConditions ()
    :
-   values (EulerEquations<dim>::n_components)
+   values (MHDEquations<dim>::n_components)
+   //values (EulerEquations<dim>::n_components)
    {}
    
    
    template <int dim>
    AllParameters<dim>::AllParameters ()
    :
-   initial_conditions (EulerEquations<dim>::n_components)
+   external_force (dim),
+   initial_conditions (MHDEquations<dim>::n_components)
+   //initial_conditions (EulerEquations<dim>::n_components)
    {}
    
    
@@ -357,6 +364,12 @@ namespace Parameters
                         Patterns::Double(0.0),
                         "gravitational force");
       
+      // Components of external force
+      for(int d=0; d<dim; ++d)
+         prm.declare_entry("f_" + Utilities::int_to_string(d) +
+                           " value", "0.0",
+                           Patterns::Anything(),
+                           "expression in x,y,z");
       
       prm.enter_subsection("time stepping");
       {
@@ -393,16 +406,21 @@ namespace Parameters
                               Utilities::int_to_string(b));
          {
             prm.declare_entry("type", "outflow",
-                              Patterns::Selection("slip|inflow|outflow|pressure|farfield"),
-                              "<slip|inflow|outflow|pressure|farfield>");
+                              Patterns::Selection("slip|inflow|outflow|pressure|farfield|periodic"),
+                              "<slip|inflow|outflow|pressure|farfield|periodic>");
             
-            for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
+            //for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
+	    for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)
             {
                prm.declare_entry("w_" + Utilities::int_to_string(di) +
                                  " value", "0.0",
                                  Patterns::Anything(),
                                  "expression in x,y,z");
             }
+            prm.declare_entry("pair", "0", Patterns::Integer(),
+			      "Boundary pair in case of periodic boundary conditions");
+	    prm.declare_entry("direction", "x", Patterns::Selection("x|y"),
+			      "Direction of the periodic boundary");
          }
          prm.leave_subsection();
       }
@@ -413,7 +431,8 @@ namespace Parameters
                            Patterns::Selection("none|rt|isenvort|vortsys"),
                            "function for initial condition");
          
-         for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
+         //for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
+         for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)
             prm.declare_entry("w_" + Utilities::int_to_string(di) + " value",
                               "0.0",
                               Patterns::Anything(),
@@ -480,35 +499,91 @@ namespace Parameters
       std::string variables = "x,y,t";
       if(dim==3) variables = "x,y,z,t";
       
+      // External force
+      std::vector<std::string> force_expressions(dim, "0.0");
+      for(unsigned int d=0; d<dim; ++d)
+         force_expressions[d] = prm.get("f_" + Utilities::int_to_string(d) +
+                                        " value");
+      external_force.initialize(variables,
+                                force_expressions,
+                                std::map<std::string,double>(),
+                                true);
+      
+      // Boundary conditions
       for (unsigned int boundary_id=0; boundary_id<max_n_boundaries;
            ++boundary_id)
       {
          prm.enter_subsection("boundary_" +
                               Utilities::int_to_string(boundary_id));
          {
-            std::vector<std::string> expressions(EulerEquations<dim>::n_components, "0.0");
+            std::vector<std::string> expressions(MHDEquations<dim>::n_components, "0.0");
+	    //std::vector<std::string> expressions(EulerEquations<dim>::n_components, "0.0");
             
             std::string boundary_type = prm.get("type");
 
             if (boundary_type == "slip")
                boundary_conditions[boundary_id].kind
-               = EulerEquations<dim>::no_penetration_boundary;
+               = MHDEquations<dim>::no_penetration_boundary;
+	       //= EulerEquations<dim>::no_penetration_boundary;
             else if (boundary_type == "inflow")
                boundary_conditions[boundary_id].kind
-               = EulerEquations<dim>::inflow_boundary;
+               = MHDEquations<dim>::inflow_boundary;
+	       //= EulerEquations<dim>::inflow_boundary;
             else if (boundary_type == "pressure")
                boundary_conditions[boundary_id].kind
-               = EulerEquations<dim>::pressure_boundary;
+               = MHDEquations<dim>::pressure_boundary;
+	       //= EulerEquations<dim>::pressure_boundary;
             else if (boundary_type == "outflow")
                boundary_conditions[boundary_id].kind
-               = EulerEquations<dim>::outflow_boundary;
+               = MHDEquations<dim>::outflow_boundary;
+	       //= EulerEquations<dim>::outflow_boundary;
             else if (boundary_type == "farfield")
                boundary_conditions[boundary_id].kind
-               = EulerEquations<dim>::farfield_boundary;
+               = MHDEquations<dim>::farfield_boundary;
+	       //= EulerEquations<dim>::farfield_boundary;
+            else if (boundary_type == "periodic")
+	    {
+	      boundary_conditions[boundary_id].kind
+		  = MHDEquations<dim>::periodic;
+	      is_periodic=true;
+	      
+	      std::pair<dealii::types::boundary_id,dealii::types::boundary_id> boundary_pair;
+	      boundary_pair.first = boundary_id;
+	      boundary_pair.second = prm.get_integer("pair");
+	      direction = prm.get("direction");
+	      
+	      unsigned int dir_int=0;
+	      if(direction=="y")
+		dir_int=1;
+	      
+	      // Check if the pair already exists
+	      if(periodic_pair.size()==0)
+	      {
+		periodic_pair.push_back(boundary_pair);
+		directions.push_back(dir_int);
+	      }
+	      else{
+		std::pair<dealii::types::boundary_id,dealii::types::boundary_id> tmp_pair (boundary_pair.second, boundary_pair.first),
+				   tmp_pair1;
+		bool pair_flag = false;
+		for(unsigned int i=0; i<periodic_pair.size();++i)
+		{
+		  tmp_pair1 = periodic_pair[i];
+		  if(tmp_pair == tmp_pair1)
+		     pair_flag = true;
+		}
+		if(!pair_flag)
+		{
+		  periodic_pair.push_back(boundary_pair);
+		  directions.push_back(dir_int);
+		}
+	      }
+	    }
             else
                AssertThrow (false, ExcNotImplemented());
             
-            for (unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+            //for (unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+	    for (unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
             {               
                expressions[c] = prm.get("w_" + Utilities::int_to_string(c) +
                                          " value");
@@ -526,9 +601,11 @@ namespace Parameters
       prm.enter_subsection("initial condition");
       {
          ic_function = prm.get("function");
-         std::vector<std::string> expressions (EulerEquations<dim>::n_components,
+	 std::vector<std::string> expressions (MHDEquations<dim>::n_components,
+         //std::vector<std::string> expressions (EulerEquations<dim>::n_components,
                                                "0.0");
-         for (unsigned int di = 0; di < EulerEquations<dim>::n_components; di++)
+         //for (unsigned int di = 0; di < EulerEquations<dim>::n_components; di++)
+	 for (unsigned int di = 0; di < MHDEquations<dim>::n_components; di++)
             expressions[di] = prm.get("w_" + Utilities::int_to_string(di) +
                                       " value");
          initial_conditions.initialize (FunctionParser<dim>::default_variable_names(),
@@ -550,8 +627,11 @@ namespace Parameters
       if(solver == mood)
          AssertThrow(basis == Pk, ExcMessage("MOOD is implemented only for Pk"));
       
-      if(limiter_type == TVB)
+      if(degree > 0 && limiter_type == TVB)
          AssertThrow(mapping_type == cartesian, ExcMessage("TVB limiter works on cartesian grids only"));
+      
+      if(limiter_type == minmax)
+         AssertThrow(basis == Qk, ExcMessage("minmax limiter is implemented only for Qk"));
       
       if(basis == Pk)
          AssertThrow(mapping_type == cartesian, ExcMessage("Pk basis can only be used with Cartesian grids"));
