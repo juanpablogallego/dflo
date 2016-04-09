@@ -315,7 +315,6 @@ namespace Parameters
    AllParameters<dim>::BoundaryConditions::BoundaryConditions ()
    :
    values (MHDEquations<dim>::n_components)
-   //values (EulerEquations<dim>::n_components)
    {}
    
    
@@ -324,7 +323,6 @@ namespace Parameters
    :
    external_force (dim),
    initial_conditions (MHDEquations<dim>::n_components)
-   //initial_conditions (EulerEquations<dim>::n_components)
    {}
    
    
@@ -409,8 +407,7 @@ namespace Parameters
                               Patterns::Selection("slip|inflow|outflow|pressure|farfield|periodic"),
                               "<slip|inflow|outflow|pressure|farfield|periodic>");
             
-            //for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
-	    for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)
+		    for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)
             {
                prm.declare_entry("w_" + Utilities::int_to_string(di) +
                                  " value", "0.0",
@@ -431,7 +428,6 @@ namespace Parameters
                            Patterns::Selection("none|rt|isenvort|vortsys"),
                            "function for initial condition");
          
-         //for (unsigned int di=0; di<EulerEquations<dim>::n_components; ++di)
          for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)
             prm.declare_entry("w_" + Utilities::int_to_string(di) + " value",
                               "0.0",
@@ -517,30 +513,24 @@ namespace Parameters
                               Utilities::int_to_string(boundary_id));
          {
             std::vector<std::string> expressions(MHDEquations<dim>::n_components, "0.0");
-	    //std::vector<std::string> expressions(EulerEquations<dim>::n_components, "0.0");
             
             std::string boundary_type = prm.get("type");
 
             if (boundary_type == "slip")
                boundary_conditions[boundary_id].kind
                = MHDEquations<dim>::no_penetration_boundary;
-	       //= EulerEquations<dim>::no_penetration_boundary;
             else if (boundary_type == "inflow")
                boundary_conditions[boundary_id].kind
                = MHDEquations<dim>::inflow_boundary;
-	       //= EulerEquations<dim>::inflow_boundary;
             else if (boundary_type == "pressure")
                boundary_conditions[boundary_id].kind
                = MHDEquations<dim>::pressure_boundary;
-	       //= EulerEquations<dim>::pressure_boundary;
             else if (boundary_type == "outflow")
                boundary_conditions[boundary_id].kind
                = MHDEquations<dim>::outflow_boundary;
-	       //= EulerEquations<dim>::outflow_boundary;
             else if (boundary_type == "farfield")
                boundary_conditions[boundary_id].kind
                = MHDEquations<dim>::farfield_boundary;
-	       //= EulerEquations<dim>::farfield_boundary;
             else if (boundary_type == "periodic")
 	    {
 	      boundary_conditions[boundary_id].kind
@@ -582,7 +572,6 @@ namespace Parameters
             else
                AssertThrow (false, ExcNotImplemented());
             
-            //for (unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
 	    for (unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
             {               
                expressions[c] = prm.get("w_" + Utilities::int_to_string(c) +
@@ -602,9 +591,7 @@ namespace Parameters
       {
          ic_function = prm.get("function");
 	 std::vector<std::string> expressions (MHDEquations<dim>::n_components,
-         //std::vector<std::string> expressions (EulerEquations<dim>::n_components,
                                                "0.0");
-         //for (unsigned int di = 0; di < EulerEquations<dim>::n_components; di++)
 	 for (unsigned int di = 0; di < MHDEquations<dim>::n_components; di++)
             expressions[di] = prm.get("w_" + Utilities::int_to_string(di) +
                                       " value");

@@ -46,18 +46,20 @@ void IsentropicVortex<dim>::vector_value (const Point<dim> &p,
 {
    const double gamma = MHDEquations<dim>::gas_gamma;
    
-   double r2   = (p[0]-x0)*(p[0]-x0) + (p[1]-y0)*(p[1]-y0);
+   double r2   = std::pow(p[0]-x0,2) + std::pow(p[1]-y0,2);
    
    double rho = std::pow(1.0 - a2*exp(1.0-r2), 1.0/(gamma-1.0));
-   double vex =  - a1 * (p[1]-y0) * std::exp(0.5*(1.0-r2));
-   double vey =  + a1 * (p[0]-x0) * std::exp(0.5*(1.0-r2));
+   double vex = mach_inf * std::cos(theta) - a1 * (p[1]-y0) * std::exp(0.5*(1.0-r2));
+   double vey = mach_inf * std::sin(theta) + a1 * (p[0]-x0) * std::exp(0.5*(1.0-r2));
    double pre = std::pow(rho, gamma) / gamma;
    
-   values[0] = rho * vex;
-   values[1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component] = rho * vex;
+   values[MHDEquations<dim>::momentum_component+1] = rho * vey;
    values[MHDEquations<dim>::density_component] = rho;
    values[MHDEquations<dim>::energy_component] = pre/(gamma-1.0)
                                                    + 0.5 * rho * (vex*vex + vey*vey);
+   for(unsigned int i=0; i<dim; ++i)
+     values[MHDEquations<dim>::magnetic_component+i] = 0;
 }
 
 //--------------------------------------------------------------------------------------------
@@ -143,17 +145,13 @@ void ConservationLaw<dim>::set_initial_condition_Qk ()
                                RayleighTaylor<dim>(parameters.gravity), old_solution);
    else if(parameters.ic_function == "isenvort")
       VectorTools::interpolate(mapping(), dof_handler,
-                               IsentropicVortex<dim>(5.0, 0.0, 0.0), old_solution);
+                               IsentropicVortex<dim>(0.5, 0.0, 5.0, 0.0, 0.0), old_solution);
    else if(parameters.ic_function == "vortsys")
       VectorTools::interpolate(mapping(), dof_handler,
                                VortexSystem<dim>(), old_solution);
    else
       VectorTools::interpolate(mapping(), dof_handler,
                                parameters.initial_conditions, old_solution);
-   
-   for(unsigned int i = 0; i < old_solution.size(); i++)
-     if(isnan(old_solution[i]))
-       std::cout<<"\n \t The initial caondition has a NaN values! in : "<< i << "\n" ;
    
    current_solution = old_solution;
    predictor = old_solution;
@@ -167,7 +165,7 @@ template <int dim>
 void ConservationLaw<dim>::set_initial_condition_Pk ()
 {
    RayleighTaylor<dim> rayleigh_taylor(parameters.gravity);
-   IsentropicVortex<dim> isentropic_vortex(5.0, 0.0, 0.0);
+   IsentropicVortex<dim> isentropic_vortex(0.5, 0.0, 5.0, 0.0, 0.0);
    VortexSystem<dim> vortex_system;
    Function<dim>* ic_function;
    if(parameters.ic_function == "rt")
@@ -185,15 +183,16 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
                             update_values|update_q_points|update_JxW_values);
    std::vector<unsigned int> dof_indices(fe.dofs_per_cell);
    
-   unsigned int n_comp=4;
+   //unsigned int n_comp=6;
    
    /*if(parameters.equation=='euler')
      n_comp=EulerEquations<dim>::n_components;
    if(parameters.equation=='mhd')
      n_comp=MHDEquations<dim>::n_components;//*/
 
-   std::vector< Vector<double> > ic_values(n_q_points, Vector<double>(n_comp));
-   
+   std::vector< Vector<double> > ic_values(n_q_points, 
+										   Vector<double>(MHDEquations<dim>::n_components));
+
    old_solution = 0.0;
 
    typename DoFHandler<dim>::active_cell_iterator

@@ -63,7 +63,6 @@ ConservationLaw<dim>::ConservationLaw (const char *input_filename,
    :
    mpi_communicator (MPI_COMM_WORLD),
    triangulation(mpi_communicator),
-   //fe (fe_scalar, EulerEquations<dim>::n_components),
    fe (fe_scalar, MHDEquations<dim>::n_components),
    dof_handler (triangulation),
    fe_cell (FE_DGQ<dim>(0)),
@@ -86,7 +85,6 @@ ConservationLaw<dim>::ConservationLaw (const char *input_filename,
 :
    mpi_communicator (MPI_COMM_WORLD),
    triangulation(mpi_communicator),
-   //fe (fe_scalar, EulerEquations<dim>::n_components),
    fe (fe_scalar, MHDEquations<dim>::n_components),
    dof_handler (triangulation),
    fe_cell (FE_DGQ<dim>(0)),
@@ -225,7 +223,7 @@ const Mapping<dim,dim>& ConservationLaw<dim>::mapping() const
    }
    else if(parameters.mapping_type == Parameters::AllParameters<dim>::q2)
    {
-      static MappingQ<dim, dim> m(2);
+      static MappingQ<dim,dim> m(2);
       return m;
    }
    else if(parameters.mapping_type == Parameters::AllParameters<dim>::cartesian)
@@ -310,8 +308,6 @@ void ConservationLaw<dim>::compute_inv_mass_matrix ()
                                      fe_values.shape_value(i,q) *
                                      fe_values.JxW(q);
          inv_mass_matrix[c][i] = 1.0 / inv_mass_matrix[c][i];
-	 if(isnan(inv_mass_matrix[c][i]))
-	   std::cout<<"\n NaN detected! cell: "<< c << "\n";
       }
    }
 }
@@ -349,7 +345,6 @@ void ConservationLaw<dim>::setup_system ()
    
    cell_average.resize 		(triangulation.n_active_cells(),
 							       Vector<double>(MHDEquations<dim>::n_components));
-							       //Vector<double>(EulerEquations<dim>::n_components));
    
    mu_shock.reinit 			(triangulation.n_active_cells());
    shock_indicator.reinit 	(triangulation.n_active_cells());
@@ -400,6 +395,7 @@ void ConservationLaw<dim>::setup_system ()
       double dx = cell->diameter() / std::sqrt(1.0*dim);
 
       for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
+      {
          if (! cell->at_boundary(face_no))
          {
             const typename DoFHandler<dim>::cell_iterator
@@ -422,6 +418,60 @@ void ConservationLaw<dim>::setup_system ()
                exit(0);
             }
          }
+         else if(parameters.is_periodic)
+	 {
+	   dealii::types::boundary_id b_id = cell->face(face_no)->boundary_id();
+	   for(unsigned int i = 0; i<parameters.periodic_pair.size(); ++i)
+	   {
+	     if((b_id==parameters.periodic_pair[i].first)||(b_id==parameters.periodic_pair[i].second))
+	     {
+	       // Find the neighbouring cell via map.find(key) and store the face_pair
+	       FacePair<dim,dim> face_pair;
+	       FaceCellPair<dim> cell_key(cell, face_no);
+	       typename PeriodicCellMap<dim>::iterator it = periodic_map.find(cell_key);
+	       face_pair = it->second;
+	       
+	       typename DoFHandler<dim>::active_cell_iterator 
+		  neighbor = dof_handler.begin_active();
+	       unsigned int face_tmp;
+	       if(face_pair.cell[0]==cell)
+	       {
+		 neighbor= face_pair.cell[1];
+		 face_tmp = face_pair.face_idx[1];
+	       }
+	       else
+	       {
+		 neighbor = face_pair.cell[0];
+		 face_tmp = face_pair.face_idx[0];
+	       }
+	       
+	       const unsigned int n_face_no = face_tmp;
+	       const unsigned int n_cell_no = cell_number (neighbor);
+	       
+	       Assert(neighbor->level() == cell->level() || neighbor->level() == cell->level()-1,
+		    ExcInternalError());
+	       Tensor<1,dim> dr = cell->face(face_no)->center() - cell->center();
+	       if(dr[0] < -0.2*dx)
+		 lcell[c] = neighbor;
+	       else if(dr[0] > 0.2*dx)
+		 rcell[c] = neighbor;
+	       else if(dr[1] < -0.2*dx)
+		 bcell[c] = neighbor;
+	       else if(dr[1] > 0.2*dx)
+		 tcell[c] = neighbor;
+	       else
+	       {
+		 std::cout << "Did not find all neighbours\n";
+		 std::cout << "dx, dy = " << dr[0] << "  " << dr[1] << std::endl;
+		 exit(0);
+	       }
+	     }
+	   }
+	       
+	   const typename DoFHandler<dim>::cell_iterator
+	   neighbor = cell->neighbor(face_no);
+	 }
+      }
    }
 }
 
@@ -518,8 +568,6 @@ ConservationLaw<dim>::compute_time_step_cartesian ()
    {
       const unsigned int c = cell_number (cell);
       const double h = cell->diameter() / std::sqrt(1.0*dim);
-      //const double sonic = EulerEquations<dim>::sound_speed(cell_average[c]);
-      //const double density = cell_average[c][EulerEquations<dim>::density_component];
       const double sonic = MHDEquations<dim>::sound_speed(cell_average[c]);
       const double density = cell_average[c][MHDEquations<dim>::density_component];
       
@@ -532,8 +580,7 @@ ConservationLaw<dim>::compute_time_step_cartesian ()
       global_dt = std::min(global_dt, dt(c));
    }
    
-   global_dt = -global_dt;
-   global_dt = -Utilities::MPI::max (global_dt, mpi_communicator);
+   global_dt = Utilities::MPI::min (global_dt, mpi_communicator);
 }
 
 //------------------------------------------------------------------------------
@@ -553,7 +600,6 @@ ConservationLaw<dim>::compute_time_step_q ()
                             update_values);
    std::vector<Vector<double> > solution_values(n_q_points,
                                                 Vector<double>(MHDEquations<dim>::n_components));
-						//Vector<double>(EulerEquations<dim>::n_components));
 
                                                    
    typename DoFHandler<dim>::active_cell_iterator
@@ -573,7 +619,6 @@ ConservationLaw<dim>::compute_time_step_q ()
       {
          max_eigenvalue = std::max(max_eigenvalue,
 				   MHDEquations<dim>::max_eigenvalue (solution_values[q]));
-                                   //EulerEquations<dim>::max_eigenvalue (solution_values[q]));
       }
       
       const unsigned int c = cell_number (cell);
@@ -603,7 +648,6 @@ ConservationLaw<dim>::compute_cell_average ()
                             update_values | update_JxW_values);
    std::vector<Vector<double> > solution_values(n_q_points,
                                                 Vector<double>(MHDEquations<dim>::n_components));
-						//Vector<double>(EulerEquations<dim>::n_components));
                                                 
    typename DoFHandler<dim>::active_cell_iterator
       cell = dof_handler.begin_active(),
@@ -622,15 +666,9 @@ ConservationLaw<dim>::compute_cell_average ()
          
          for (unsigned int q=0; q<n_q_points; ++q)
 	    for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
-            //for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
-	    {
                cell_average[cell_no][c] += solution_values[q][c] * fe_values.JxW(q);
-	    }
          
          cell_average[cell_no] /= cell->measure();
-	 if((cell_average[cell_no][dim]>1e-10)||(cell_average[cell_no][dim+1]>1e-10))
-	   std::cout<<"\n \t Average not zero in cell number bx="<< cell_average[cell_no][dim] << "\t by="<<cell_average[cell_no][dim+1] ;
-	 
       }
    }
 }
@@ -739,10 +777,6 @@ void ConservationLaw<dim>::iterate_explicit (IntegratorExplicit<dim>& integrator
       }
       
       assemble_system (integrator);
-      
-      /*for(unsigned int i = 0; i < right_hand_side.size(); i++)
-	if(isnan(right_hand_side(i)))
-	  std::cout<<"\n \t NaN at the RHS vector, position :" << i << "\n";//*/
       
       res_norm = right_hand_side.l2_norm();
       if(rk == 0) res_norm0 = res_norm;

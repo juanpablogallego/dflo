@@ -51,12 +51,7 @@ struct EulerEquations
    // First dim components correspond to momentum
    static const unsigned int n_components             = dim + 2;
    static const unsigned int density_component        = dim;
-   static const unsigned int energy_component         = dim+1;//*/
-   
-   // MHD version
-   /*static const unsigned int n_components             = 2*dim + 2;
-   static const unsigned int density_component        = 2*dim;
-   static const unsigned int energy_component         = 2*dim+1;//*/
+   static const unsigned int energy_component         = dim+1;
    
    static
    std::vector<std::string>
@@ -67,11 +62,6 @@ struct EulerEquations
       names.push_back ("YMomentum");
       if(dim==3)
          names.push_back ("ZMomentum");
-      // MHD addition
-      /*names.push_back ("XMField");
-      names.push_back ("YMField");
-      if(dim==3)
-         names.push_back ("ZMField");//*/
       names.push_back ("Density");
       names.push_back ("Energy");
       
@@ -155,7 +145,7 @@ struct EulerEquations
    template <typename InputVector>
    static
    typename InputVector::value_type
-   max_eigenvalue (const InputVector        &W,
+   max_eigenvalue (const InputVector           &W,
                    const dealii::Tensor<1,dim> &normal)
    {
       typedef typename InputVector::value_type number;
@@ -233,9 +223,9 @@ struct EulerEquations
    //---------------------------------------------------------------------------
    template <typename InputVector, typename number>
    static
-   void normal_flux (const InputVector        &W,
-                     const dealii::Point<dim> &normal,
-                     number                   (&flux)[n_components])
+   void normal_flux (const InputVector           &W,
+                     const dealii::Tensor<1,dim> &normal,
+                     number                      (&flux)[n_components])
    {
       const number pressure = compute_pressure<number> (W);
       
@@ -401,7 +391,7 @@ struct EulerEquations
    static
    void lxf_flux 
    (
-    const dealii::Tensor<1,dim> &normal,
+    const dealii::Tensor<1,dim>      &normal,
     const InputVector                &Wplus,
     const InputVector                &Wminus,
     const dealii::Vector<double>     &Aplus,
@@ -459,7 +449,7 @@ struct EulerEquations
    static
    void steger_warming_flux 
    (
-    const dealii::Tensor<1,dim> &normal,
+    const dealii::Tensor<1,dim>      &normal,
     const InputVector                &Wplus,
     const InputVector                &Wminus,
     typename InputVector::value_type (&normal_flux)[n_components]
@@ -546,7 +536,7 @@ struct EulerEquations
    static
    void roe_flux
    (
-    const dealii::Tensor<1,dim> &normal,
+    const dealii::Tensor<1,dim>      &normal,
     const InputVector                &W_l,
     const InputVector                &W_r,
     typename InputVector::value_type (&normal_flux)[n_components]
@@ -755,11 +745,11 @@ struct EulerEquations
       }
       
    }
-      // --------------------------------------------------------------------------
+   // --------------------------------------------------------------------------
    // Compute dissipation matrix in entropy stable flux
    // --------------------------------------------------------------------------
    static
-   void kep_diff_matrix(const dealii::Tensor<1,dim>     &normal,
+   void kep_diff_matrix(const dealii::Tensor<1,dim>  &normal,
                         const dealii::Vector<double> &W_l,
                         const dealii::Vector<double> &W_r,
                         double (&Dm)[n_components][n_components])
@@ -788,7 +778,7 @@ struct EulerEquations
          v2         += vel[d] * vel[d];
       }
       
-      //double vel2 = 0.5 * (v2_l + v2_r);
+      double vel2 = 0.5 * (v2_l + v2_r);
       
       //pressure
       double p_l = (gas_gamma-1) * (W_l[energy_component] - 0.5 * W_l[density_component] * v2_l);
@@ -938,7 +928,7 @@ struct EulerEquations
    static
    void kep_flux2
    (
-    const dealii::Point<dim>         &normal,
+    const dealii::Tensor<1,dim>      &normal,
     const InputVector                &W_l,
     const InputVector                &W_r,
     const dealii::Vector<double>     &Aplus,
@@ -1086,7 +1076,7 @@ struct EulerEquations
    void kinetic_split_flux
    (
     int                               sign,
-    const dealii::Tensor<1,dim>         &normal,
+    const dealii::Tensor<1,dim>      &normal,
     const InputVector                &W,
     typename InputVector::value_type (&normal_flux)[n_components]
    )
@@ -1158,7 +1148,7 @@ struct EulerEquations
    static
    void no_penetration_flux 
    (
-    const dealii::Point<dim>         &normal,
+    const dealii::Tensor<1,dim>      &normal,
     const InputVector                &Wminus,
     typename InputVector::value_type (&normal_flux)[n_components]
    )
@@ -1228,7 +1218,8 @@ struct EulerEquations
       outflow_boundary,
       no_penetration_boundary,
       pressure_boundary,
-      farfield_boundary
+      farfield_boundary,
+      periodic
    };
    
    
@@ -2617,6 +2608,31 @@ struct MHDEquations
 //      if(model==0)
 //	for(unsigned int d = dim; d < 2*dim; d++)
 //	  Wminus[d]=0;
+   }
+   
+   //TODO: Check if the entropy_var is the same for MHD
+   //---------------------------------------------------------------------------
+   // Compute entropy variables V, given conserved variables W
+   //---------------------------------------------------------------------------
+   template <typename InputVector, typename number>
+   static
+   void entropy_var (const InputVector &W,
+                     number            (&V)[n_components])
+   {
+      number pressure = compute_pressure<number> (W);
+      number T = pressure / W[density_component];
+
+      number u2 = 0;
+      for(unsigned int d=0; d<dim; ++d)
+      {
+         number u = W[d] / W[density_component];
+         V[d] = u / T;
+         u2 += u * u;
+      }
+
+      V[density_component] = log(W[density_component] / std::pow(T, 1.0/(gas_gamma-1.0))) 
+                           - 0.5 * u2 / T;
+      V[energy_component] = -1.0 / T;
    }
    
    class Postprocessor : public dealii::DataPostprocessor<dim>

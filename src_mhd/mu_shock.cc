@@ -49,11 +49,11 @@ void ConservationLaw<dim>::shock_cell_term (DoFInfo& dinfo,
    const unsigned int n_q_points    = fe_v.n_quadrature_points;
 
    Table<2,double>
-      W_theta (n_q_points, EulerEquations<dim>::n_components);
+      W_theta (n_q_points, MHDEquations<dim>::n_components);
 
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      for (unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+      for (unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
          W_theta[q][c] = 0;
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
@@ -79,9 +79,9 @@ void ConservationLaw<dim>::shock_cell_term (DoFInfo& dinfo,
    double average_speed = 0;
    for (unsigned int point=0; point<n_q_points; ++point)
    {
-      density_norm += W_theta[point][EulerEquations<dim>::density_component] *
+      density_norm += W_theta[point][MHDEquations<dim>::density_component] *
                       fe_v.JxW(point);
-      double max_speed = EulerEquations<dim>::max_eigenvalue (W_theta[point]);
+      double max_speed = MHDEquations<dim>::max_eigenvalue (W_theta[point]);
       average_speed += max_speed * fe_v.JxW(point);
    }
    average_speed /= dinfo.cell->measure();
@@ -108,6 +108,7 @@ void ConservationLaw<dim>::shock_cell_term (DoFInfo& dinfo,
 //------------------------------------------------------------------------------
 // Contribution from boundary faces
 //------------------------------------------------------------------------------
+
 template <int dim>
 void ConservationLaw<dim>::shock_boundary_term (DoFInfo& dinfo, 
                                                 CellInfo& info)
@@ -121,12 +122,12 @@ void ConservationLaw<dim>::shock_boundary_term (DoFInfo& dinfo,
    const unsigned int dofs_per_cell = fe_v.dofs_per_cell;
    
    Table<2,double>
-   Wplus (n_q_points, EulerEquations<dim>::n_components),
-   Wminus (n_q_points, EulerEquations<dim>::n_components);
+   Wplus (n_q_points, MHDEquations<dim>::n_components),
+   Wminus (n_q_points, MHDEquations<dim>::n_components);
 
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+      for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
          Wplus[q][c] = 0;
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
@@ -146,17 +147,17 @@ void ConservationLaw<dim>::shock_boundary_term (DoFInfo& dinfo,
                           Parameters::AllParameters<dim>::max_n_boundaries));
    
    std::vector<Vector<double> >
-   boundary_values(n_q_points, Vector<double>(EulerEquations<dim>::n_components));
+   boundary_values(n_q_points, Vector<double>(MHDEquations<dim>::n_components));
    parameters.boundary_conditions[boundary_id]
    .values.vector_value_list(fe_v.get_quadrature_points(),
                              boundary_values);
    
    
-   typename EulerEquations<dim>::BoundaryKind boundary_kind = 
+   typename MHDEquations<dim>::BoundaryKind boundary_kind = 
       parameters.boundary_conditions[boundary_id].kind;
 
    for (unsigned int q = 0; q < n_q_points; q++)
-      EulerEquations<dim>::compute_Wminus (boundary_kind,
+      MHDEquations<dim>::compute_Wminus (boundary_kind,
                                            fe_v.normal_vector(q),
                                            Wplus[q],
                                            boundary_values[q],
@@ -165,13 +166,13 @@ void ConservationLaw<dim>::shock_boundary_term (DoFInfo& dinfo,
    // Compute entropy variables at quadrature points
    // We declare it as type Sacado::Fad::DFad<double> even though we dont need its
    // derivative. Otherwise there is error in assignment due to different types.
-   typedef double EntropyVar[EulerEquations<dim>::n_components];
+   typedef double EntropyVar[MHDEquations<dim>::n_components];
    EntropyVar *Vplus = new EntropyVar[n_q_points];
    EntropyVar *Vminus= new EntropyVar[n_q_points];
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      EulerEquations<dim>::entropy_var (Wplus [q], Vplus [q]);
-      EulerEquations<dim>::entropy_var (Wminus[q], Vminus[q]);
+      MHDEquations<dim>::entropy_var (Wplus [q], Vplus [q]);
+      MHDEquations<dim>::entropy_var (Wminus[q], Vminus[q]);
    }
 
    // Compute integral of shock indicator on face
@@ -179,7 +180,7 @@ void ConservationLaw<dim>::shock_boundary_term (DoFInfo& dinfo,
    for (unsigned int q=0; q<n_q_points; ++q)
    {
       double ds = 0;
-      for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+      for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
          ds += (Vplus[q][c] - Vminus[q][c]) * (Wplus[q][c] - Wminus[q][c]);
       jump += ds * fe_v.JxW(q);
    }
@@ -214,12 +215,12 @@ void ConservationLaw<dim>::shock_face_term (DoFInfo& dinfo1, DoFInfo& dinfo2,
    const unsigned int dofs_per_cell_neighbor = fe_v_neighbor.dofs_per_cell;
 
    Table<2,double>
-   Wplus (n_q_points, EulerEquations<dim>::n_components),
-   Wminus (n_q_points, EulerEquations<dim>::n_components);
+   Wplus (n_q_points, MHDEquations<dim>::n_components),
+   Wminus (n_q_points, MHDEquations<dim>::n_components);
    
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+      for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
          Wplus[q][c] = 0;
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
@@ -235,7 +236,7 @@ void ConservationLaw<dim>::shock_face_term (DoFInfo& dinfo1, DoFInfo& dinfo2,
    
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+      for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
          Wminus[q][c] = 0;
       for (unsigned int i=0; i<dofs_per_cell_neighbor; ++i)
       {
@@ -253,13 +254,13 @@ void ConservationLaw<dim>::shock_face_term (DoFInfo& dinfo1, DoFInfo& dinfo2,
    // Compute entropy variables at quadrature points
    // We declare it as type Sacado::Fad::DFad<double> even though we dont need its
    // derivative. Otherwise there is error in assignment due to different types.
-   typedef double EntropyVar[EulerEquations<dim>::n_components];
+   typedef double EntropyVar[MHDEquations<dim>::n_components];
    EntropyVar *Vplus = new EntropyVar[n_q_points];
    EntropyVar *Vminus= new EntropyVar[n_q_points];
    for (unsigned int q=0; q<n_q_points; ++q)
    {
-      EulerEquations<dim>::entropy_var (Wplus [q], Vplus [q]);
-      EulerEquations<dim>::entropy_var (Wminus[q], Vminus[q]);
+      MHDEquations<dim>::entropy_var (Wplus [q], Vplus [q]);
+      MHDEquations<dim>::entropy_var (Wminus[q], Vminus[q]);
    }
 
    // Compute integral of shock indicator on face
@@ -267,7 +268,7 @@ void ConservationLaw<dim>::shock_face_term (DoFInfo& dinfo1, DoFInfo& dinfo2,
    for (unsigned int q=0; q<n_q_points; ++q)
    {
       double ds = 0;
-      for(unsigned int c=0; c<EulerEquations<dim>::n_components; ++c)
+      for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
          ds += (Vplus[q][c] - Vminus[q][c]) * (Wplus[q][c] - Wminus[q][c]);
       jump += ds * fe_v.JxW(q);
    }
