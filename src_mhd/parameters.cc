@@ -321,7 +321,7 @@ namespace Parameters
    template <int dim>
    AllParameters<dim>::AllParameters ()
    :
-   external_force (dim),
+   external_force (MHDEquations<dim>::v_components),
    initial_conditions (MHDEquations<dim>::n_components)
    {}
    
@@ -363,7 +363,8 @@ namespace Parameters
                         "gravitational force");
       
       // Components of external force
-      for(int d=0; d<dim; ++d)
+      //for(int d=0; d<dim; ++d)
+      for(int d=0; d<MHDEquations<dim>::v_components; ++d)
          prm.declare_entry("f_" + Utilities::int_to_string(d) +
                            " value", "0.0",
                            Patterns::Anything(),
@@ -496,8 +497,9 @@ namespace Parameters
       if(dim==3) variables = "x,y,z,t";
       
       // External force
-      std::vector<std::string> force_expressions(dim, "0.0");
-      for(unsigned int d=0; d<dim; ++d)
+      //std::vector<std::string> force_expressions(dim, "0.0");
+      std::vector<std::string> force_expressions(MHDEquations<dim>::v_components, "0.0");
+      for(unsigned int d=0; d<MHDEquations<dim>::v_components; ++d)
          force_expressions[d] = prm.get("f_" + Utilities::int_to_string(d) +
                                         " value");
       external_force.initialize(variables,

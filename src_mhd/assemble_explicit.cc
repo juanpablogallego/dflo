@@ -52,7 +52,9 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    typedef double FluxMatrix[MHDEquations<dim>::n_components][dim];
    FluxMatrix *flux = new FluxMatrix[n_q_points];
    
-   std::vector<Vector<double> > ext_force_values(n_q_points, Vector<double>(dim));
+   //std::vector<Vector<double> > ext_force_values(n_q_points, Vector<double>(dim));
+   std::vector<Vector<double> > ext_force_values(n_q_points,
+						 Vector<double>(MHDEquations<dim>::v_components));
    parameters.external_force.vector_value_list(fe_v.get_quadrature_points(),
                                                ext_force_values);
    

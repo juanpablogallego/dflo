@@ -55,10 +55,11 @@ void IsentropicVortex<dim>::vector_value (const Point<dim> &p,
    
    values[MHDEquations<dim>::momentum_component] = rho * vex;
    values[MHDEquations<dim>::momentum_component+1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component+2] = 0;
    values[MHDEquations<dim>::density_component] = rho;
    values[MHDEquations<dim>::energy_component] = pre/(gamma-1.0)
                                                    + 0.5 * rho * (vex*vex + vey*vey);
-   for(unsigned int i=0; i<dim; ++i)
+   for(unsigned int i=0; i<MHDEquations<dim>::v_components; ++i)
      values[MHDEquations<dim>::magnetic_component+i] = 0;
 }
 
@@ -92,10 +93,11 @@ void VortexSystem<dim>::vector_value (const Point<dim> &p,
    
    values[MHDEquations<dim>::momentum_component] = rho * vex;
    values[MHDEquations<dim>::momentum_component+1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component+2] = 0;
    values[MHDEquations<dim>::density_component] = rho;
    values[MHDEquations<dim>::energy_component] = pre/(gamma-1.0)
                                                  + 0.5 * rho * (vex*vex + vey*vey);
-   for(unsigned int i=0; i<dim; ++i)
+   for(unsigned int i=0; i<MHDEquations<dim>::v_components; ++i)
      values[MHDEquations<dim>::magnetic_component+i]=0;
 }
 
