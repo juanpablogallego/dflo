@@ -246,7 +246,10 @@ MHDEquations<dim>::Postprocessor::get_names () const
   names.push_back ("XVelocity");
   names.push_back ("YVelocity");
   if(dim==3)
-     names.push_back ("ZVelocity");
+    names.push_back ("ZVelocity");
+  //names.push_back ("XMagnetic");
+  //names.push_back ("YMagnetic");
+  //names.push_back ("ZMagnetic");
   names.push_back ("Pressure");
 
   if (do_schlieren_plot == true)

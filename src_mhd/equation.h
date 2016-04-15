@@ -1579,12 +1579,13 @@ struct EulerEquations
 template <int dim>
 struct MHDEquations
 {
+   static const unsigned int v_components = 3;
    // First dim components correspond to momentum
-   static const unsigned int n_components             = 2*dim + 2;
-   static const unsigned int density_component        = 2*dim;
-   static const unsigned int energy_component         = 2*dim+1;
-   static const unsigned int momentum_component		  = 0;
-   static const unsigned int magnetic_component		  = dim;
+   static const unsigned int n_components             = 2*v_components + 2;
+   static const unsigned int density_component        = 2*v_components;
+   static const unsigned int energy_component         = 2*v_components+1;
+   static const unsigned int momentum_component	      = 0;
+   static const unsigned int magnetic_component       = v_components;
    
    static const unsigned int model = 0;
    
@@ -1597,12 +1598,10 @@ struct MHDEquations
       std::vector<std::string> names;
       names.push_back ("XMomentum");
       names.push_back ("YMomentum");
-      if(dim==3)
-         names.push_back ("ZMomentum");
+      names.push_back ("ZMomentum");
       names.push_back ("XMagnetic");
       names.push_back ("YMagnetic");
-      if(dim==3)
-         names.push_back ("ZMagnetic");
+      names.push_back ("ZMagnetic");
       names.push_back ("Density");
       names.push_back ("Energy");
       
@@ -1616,14 +1615,13 @@ struct MHDEquations
    {
       std::vector<dealii::DataComponentInterpretation::DataComponentInterpretation>
       data_component_interpretation
-      (dim, dealii::DataComponentInterpretation::component_is_part_of_vector);
+      (v_components, dealii::DataComponentInterpretation::component_is_part_of_vector);
       data_component_interpretation
       .push_back (dealii::DataComponentInterpretation::component_is_part_of_vector);
       data_component_interpretation
       .push_back (dealii::DataComponentInterpretation::component_is_part_of_vector);
-      if(dim==3)
-	data_component_interpretation
-	.push_back (dealii::DataComponentInterpretation::component_is_part_of_vector);
+      data_component_interpretation
+      .push_back (dealii::DataComponentInterpretation::component_is_part_of_vector);
       data_component_interpretation
       .push_back (dealii::DataComponentInterpretation::component_is_scalar);
       data_component_interpretation
@@ -1645,8 +1643,8 @@ struct MHDEquations
    {
       number kinetic_energy = 0;
       // Momentum variables
-      for (unsigned int d=0; d<dim; ++d)
-         kinetic_energy += *(W.begin()+d) * *(W.begin()+d);
+      for (unsigned int d=0; d<v_components; ++d)
+         kinetic_energy += *(W.begin()+momentum_component+d) * *(W.begin()+momentum_component+d);
       kinetic_energy *= 0.5/(*(W.begin() + density_component));
       return kinetic_energy;
    }
@@ -1662,9 +1660,9 @@ struct MHDEquations
       number magnetic_pressure = 0;
       if (model == 0)
 	return magnetic_pressure;
-      for (unsigned int d=dim; d<2*dim; ++d)
-         magnetic_pressure += *(W.begin()+d) *
-                           *(W.begin()+d);
+      for (unsigned int d=0; d<v_components; ++d)
+         magnetic_pressure += *(W.begin()+magnetic_component+d) *
+                              *(W.begin()+magnetic_component+d);
       magnetic_pressure*=0.5;
       return magnetic_pressure;
    }
@@ -1718,9 +1716,9 @@ struct MHDEquations
    {
      typedef typename InputVector::value_type number;
      number B_n = 0;
-     for (unsigned int i = 0; i<dim; i++)
-       B_n += std::pow(*(W.begin()+dim+i),2);
-     const number C_A = std::sqrt(B_n/(*(W.begin()+density_component))); //(*W.begin() + dim)/std::sqrt((*W.begin()+density_component))
+     for (unsigned int i = 0; i<v_components; i++)
+       B_n += std::pow(*(W.begin()+magnetic_component+i),2);
+     const number C_A = std::sqrt(B_n/(*(W.begin()+density_component)));
      return C_A;
    }
    
@@ -1736,11 +1734,11 @@ struct MHDEquations
       typedef typename InputVector::value_type number;
 
       const number pressure = compute_pressure<number> (W);
-      const number C_a = alfven_speed(W, normal); //std::sqrt( (*(W.begin()+dim)) / (*(W.begin() + density_component)));
+      const number C_a = alfven_speed(W, normal);
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
       number b_2 = 0;
-      for(unsigned int d=dim; d<2*dim; d++)
-	b_2 = (*(W.begin()+d))* (*(W.begin()+d));
+      for(unsigned int d=0; d<v_components; d++)
+	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
       number C_s = std::sqrt( 0.5*(a_2 + b_2 - std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
@@ -1756,11 +1754,11 @@ struct MHDEquations
       typedef typename InputVector::value_type number;
 
       const number pressure = compute_pressure<number> (W);
-      const number C_a = alfven_speed(W); //std::sqrt( (*(W.begin()+dim)) / (*(W.begin() + density_component)));
+      const number C_a = alfven_speed(W);
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
       number b_2 = 0;
-      for(unsigned int d=dim; d<2*dim; d++)
-	b_2 = (*(W.begin()+d))* (*(W.begin()+d));
+      for(unsigned int d=0; d<v_components; d++)
+	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
       number C_s = std::sqrt( 0.5*(a_2 + b_2 - std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
@@ -1786,8 +1784,8 @@ struct MHDEquations
       //if(isnan(a_2)) std::cout<<"\n\t a_2 is nan in the fast speed";
 
       number b_2 = 0;
-      for(unsigned int d=dim; d<2*dim; d++)
-	b_2 = (*(W.begin()+d))* (*(W.begin()+d));
+      for(unsigned int d=0; d<v_components; d++)
+	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
       //if(isnan(b_2)) std::cout<<"\n\t b_2 is nan in the fast speed";
 
@@ -1813,8 +1811,8 @@ struct MHDEquations
       const number C_a = alfven_speed(W);
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
       number b_2 = 0;
-      for(unsigned int d=dim; d<2*dim; d++)
-	b_2 = (*(W.begin()+d))* (*(W.begin()+d));
+      for(unsigned int d=0; d<v_components; d++)
+	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
       number C_f = std::sqrt( 0.5*(a_2 + b_2 + std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
@@ -1833,8 +1831,8 @@ struct MHDEquations
       typedef typename InputVector::value_type number;
 
       number velocity = 0;
-      for(unsigned int  d=0; d < dim; d++)
-	velocity += (*(W.begin()+d)) * (*(W.begin()+d));
+      for(unsigned int  d=0; d < v_components; d++)
+	velocity += (*(W.begin()+momentum_component+d)) * (*(W.begin()+momentum_component+d));
       velocity = std::sqrt(velocity) / (*(W.begin()+density_component));
 
       number C_f = fast_speed(W, normal);
@@ -1850,8 +1848,8 @@ struct MHDEquations
       typedef typename InputVector::value_type number;
 
       number velocity = 0;
-      for(unsigned int  d=0; d < dim; d++)
-	velocity += (*(W.begin()+d)) * (*(W.begin()+d));
+      for(unsigned int  d=0; d < v_components; d++)
+	velocity += (*(W.begin()+momentum_component+d)) * (*(W.begin()+momentum_component+d));
       velocity = std::sqrt(velocity) / (*(W.begin()+density_component));
 
       number C_f = fast_speed(W);
@@ -1871,14 +1869,14 @@ struct MHDEquations
 
       number velocity = 0;
       for(unsigned int d=0; d<dim; ++d)
-	velocity += (*(W.begin()+d)) * normal[d];
+	velocity += (*(W.begin()+momentum_component+d)) * normal[d];
       velocity /=  (*(W.begin()+density_component));
       /*if(isnan(velocity))
 	std::cout<<"\n\t Velocity is nan in the max eigenvalue normal density = "<<W[density_component];//*/
 
       number C_f = std::fabs(fast_speed(W,normal));
-//      if(isnan(C_f))
-//	std::cout<<"\n\t Fast speed is nan in the max eigenvalue normal";
+      /*if(isnan(C_f))
+	std::cout<<"\n\t Fast speed is nan in the max eigenvalue normal";//*/
 
       return fabs(velocity) + C_f;
    }
@@ -1922,19 +1920,25 @@ struct MHDEquations
       const number magnetic_pressure = compute_magnetic_pressure<number> (W);
       
       // Compute the flux function for the momentum
-      for (unsigned int d=0, i=dim; d<dim; ++d, ++i)
+      for (unsigned int i=0; i<v_components; ++i)
       {
-         for (unsigned int e=0, j=dim; e<dim; ++e, ++j)
-            flux[d][e] = W[d] * W[e] / W[density_component]
-						 + W[i] * W[j];
-         
-         flux[d][d] += pressure + magnetic_pressure;
+	for (unsigned int j=0; j<dim; ++j)
+	{
+            flux[momentum_component+i][j] = W[momentum_component+i]*W[momentum_component+j]/W[density_component]
+					    + W[magnetic_component+i]*W[magnetic_component+j];
+	if(i==j)
+	  flux[momentum_component+i][momentum_component+j] += pressure + magnetic_pressure;
+	
+	/*if(isnan(flux[momentum_component+i][momentum_component+j]))
+	  std::cout<<"\n\t flux function is NaN";//*/
+	
+	}
       }
       
       // Compute the flux function for the magnetic field
       if(model==0)
       {
-	for (unsigned int i=dim; i<2*dim; ++i)
+	for (unsigned int i=magnetic_component; i<density_component; ++i)
 	{
 	  for (unsigned int e=0; e<dim; ++e)
 	  {
@@ -1944,32 +1948,32 @@ struct MHDEquations
       }
       else
       {
-	for (unsigned int d=0, i=dim; d<dim; ++d, ++i)
+
+	for (unsigned int i=0; i<v_components; ++i)
 	{
-	  for (unsigned int e=0, j=dim; e<dim; ++e, ++j)
+	  for (unsigned int j=0; j<dim; ++j)
 	  {
-	    flux[i][e] = W[d] * W[j] - W[e] * W[i];
-	    flux[i][e] /= W[density_component];
+	    flux[magnetic_component+i][j] = W[momentum_component+i] * W[magnetic_component+j]
+					    - W[momentum_component+j] * W[magnetic_component+i];
+	    flux[magnetic_component+i][j] /= W[density_component];
 	  }
 	}
       }
       
       // Flux function for the conservation of mass
-      number udotB = 0;
+      for (unsigned int i=0; i<dim; ++i)
+	flux[density_component][i] = W[momentum_component+i];
       
-      for (unsigned int d=0, i=dim; d<dim; ++d, ++i)
-      {
-	flux[density_component][d] = W[d];
-	udotB += W[d] * W[i];
-      }
+      number udotB = 0;
+      for (unsigned int i=0; i<v_components;++i)
+	udotB += W[momentum_component+i] * W[magnetic_component+i];
       
       if(model==0)
 	number udotB = 0;
 
-      
       // Flux function for the conservation of energy
-      for (unsigned int d=0, i=dim; d<dim; ++d, ++i)
-         flux[energy_component][d] = W[d] / W[density_component] *
+      for (unsigned int i=0; i<dim; ++i)
+         flux[energy_component][i] = W[momentum_component+i] / W[density_component] *
                                      (W[energy_component] + pressure + magnetic_pressure)
                                      - W[i]*udotB;
    }
@@ -2500,13 +2504,15 @@ struct MHDEquations
       forcing[density_component] = 0.0;
       forcing[energy_component] = 0.0;
       
-      for(int d=0; d<dim; ++d)
+      //for(int d=0; d<dim; ++d)
+      for(int d=0; d<v_components; ++d)
       {
          forcing[d] = W[density_component] * ext_force[d];
          forcing[energy_component] += W[d] * ext_force[d];
       }
       
-      for(int d=dim; d<2*dim; ++d)
+      //for(int d=dim; d<2*dim; ++d)
+      for(int d=v_components; d<2*v_components; ++d)
       {
          forcing[d] = 0;
       }
@@ -2559,13 +2565,15 @@ struct MHDEquations
 		density = Wplus[density_component];
 		
 		typename DataVector::value_type kinetic_energy = 0;
-		for (unsigned int d=0; d<dim; ++d)
+		//for (unsigned int d=0; d<dim; ++d)
+		for (unsigned int d=0; d<v_components; ++d)
 		  kinetic_energy += Wplus[d]*Wplus[d];
 		kinetic_energy *= 0.5/density;
 		
-		// Same as in the Euler equations, making the magneticc field also equal to the interior values
-		for (unsigned int c = 0; c < 2*dim; ++c)
-		  Wminus[c] = Wplus[c];
+		// Same as in the Euler equations, making the magnetic field also equal to the interior values
+		//for (unsigned int c = 0; c < 2*dim; ++c)
+		for (unsigned int c = 0; c < v_components; ++c)
+		  Wminus[magnetic_component+c] = Wplus[magnetic_component+c];
 		
 		Wminus[density_component] = density;
 		Wminus[energy_component] = boundary_values(energy_component) / (gas_gamma-1.0) +
@@ -2584,8 +2592,8 @@ struct MHDEquations
 		  Wminus[c] = Wplus[c] - 2.0 * vdotn * normal_vector[c];
 		
 		// Magnetic field doesn't change here either
-		for (unsigned int c = dim; c < 2*dim; ++c)
-		  Wminus[c] = Wplus[c];
+		for (unsigned int c = 0; c < v_components; ++c)
+		  Wminus[magnetic_component+c] = Wplus[magnetic_component+c];
 		
 		Wminus[density_component] = Wplus[density_component];
 		Wminus[energy_component]  = Wplus[energy_component];
@@ -2600,14 +2608,10 @@ struct MHDEquations
 		break;
 	      }
 	      
-	      // TODO: Add periodic Boundary conditions
-            
 	      default:
 		Assert (false, dealii::ExcNotImplemented());
       }
-//      if(model==0)
-//	for(unsigned int d = dim; d < 2*dim; d++)
-//	  Wminus[d]=0;
+
    }
    
    //TODO: Check if the entropy_var is the same for MHD
@@ -2623,7 +2627,8 @@ struct MHDEquations
       number T = pressure / W[density_component];
 
       number u2 = 0;
-      for(unsigned int d=0; d<dim; ++d)
+      //for(unsigned int d=0; d<dim; ++d)
+      for(unsigned int d=0; d<v_components; ++d)
       {
          number u = W[d] / W[density_component];
          V[d] = u / T;
