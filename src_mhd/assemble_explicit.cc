@@ -52,6 +52,10 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    typedef double FluxMatrix[MHDEquations<dim>::n_components][dim];
    FluxMatrix *flux = new FluxMatrix[n_q_points];
    
+   // Powell Coeficients of the divergence divB
+   typedef double PowellCoef[MHDEquations<dim>::n_components];
+   PowellCoef *powellcoef = new PowellCoef[n_q_points];
+   
    //std::vector<Vector<double> > ext_force_values(n_q_points, Vector<double>(dim));
    std::vector<Vector<double> > ext_force_values(n_q_points,
 						 Vector<double>(MHDEquations<dim>::v_components));
@@ -61,11 +65,15 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
   typedef double ForcingVector[MHDEquations<dim>::n_components];
    ForcingVector *forcing = new ForcingVector[n_q_points];
    
+   // Divergence of the magnetic field (should be a scalar)
+   double divB = 0;
+   
    for (unsigned int q=0; q<n_q_points; ++q)
    {
       for(unsigned int c=0; c<MHDEquations<dim>::n_components; ++c)
       {
          W[q][c] = 0.0;
+	 powellcoef[q][c] = 0;
          /*for(unsigned int d=0; d<dim; ++d)
             grad_W[q][c][d] = 0.0;*/
       }
@@ -75,6 +83,15 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
          
          W[q][c] += current_solution(dof_indices[i]) *
                     fe_v.shape_value_component(i, q, c);
+
+	 // divB : This should be done better
+	 if((c>=MHDEquations<dim>::magnetic_component)&&
+	    (c<MHDEquations<dim>::density_component))
+	 {
+	   unsigned int d = c-MHDEquations<dim>::magnetic_component;
+	   divB += current_solution(dof_indices[i]) *
+		   fe_v.shape_grad_component(i, q, c)[d];
+	 }
          
          /*for (unsigned int d = 0; d < dim; ++d)
             grad_W[q][c][d] += current_solution(dof_indices[i]) *
@@ -83,6 +100,8 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
       
       MHDEquations<dim>::compute_flux_matrix (W[q], flux[q]);
       MHDEquations<dim>::compute_forcing_vector (W[q], ext_force_values[q], forcing[q]);
+      if(parameters.add_powell_terms)
+	MHDEquations<dim>::powell_terms(W[q], powellcoef[q]);
    }
    
    
@@ -116,6 +135,12 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
                 forcing[point][component_i] *
                 fe_v.shape_value_component(i, point, component_i) *
                 fe_v.JxW(point);
+	 
+	 // Powell terms WARNING: Check if it works
+	 F_i -= powellcoef[point][component_i] *
+                fe_v.shape_value_component(i, point, component_i) *
+                fe_v.JxW(point) *
+                divB;
       }
       
       local_vector (i) -= F_i;
@@ -123,6 +148,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    
    delete[] forcing;
    delete[] flux;
+   delete[] powellcoef;
    
 }
 

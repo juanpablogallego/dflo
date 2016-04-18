@@ -165,6 +165,9 @@ namespace Parameters
       enum System_model {euler, mhd};
       System_model model;
       
+      // Add Powell terms flag
+      bool add_powell_terms;
+      
       double linear_residual;
       int max_iterations;
       
@@ -365,6 +368,7 @@ namespace Parameters
    {
       static const unsigned int max_n_boundaries = 10;
       
+
       // In case of periodic boundary conditions
       bool is_periodic = 0;
       std::string direction;

@@ -1979,6 +1979,34 @@ struct MHDEquations
    }
    
    //---------------------------------------------------------------------------
+   // Compute cartesian components of flux
+   //---------------------------------------------------------------------------
+   template <typename InputVector, typename number>
+   static
+   void powell_terms (const InputVector &W,
+                          number (&flux)[n_components]) //, number divB)
+   {
+     number density_1=1/W[density_component];
+     number velocity;
+     
+     flux[energy_component] = 0;
+     for (unsigned int i=0; i<v_components; ++i)
+     {
+       velocity = W[momentum_component+i]*density_1;
+       
+       // Powell terms for the momentum components
+       flux[momentum_component + i] = W[magnetic_component + i]; //*divB;
+       // Powell terms for the magnetic components
+       flux[magnetic_component + i] = velocity; //*divB;
+       
+       flux[energy_component] += velocity * W[magnetic_component + i];
+     }
+     // Powell terms for the energy component
+     //flux[energy_component] *= divB;
+     
+   }
+   
+   //---------------------------------------------------------------------------
    // Compute flux along normal
    //---------------------------------------------------------------------------
    /*template <typename InputVector, typename number>
