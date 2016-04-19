@@ -430,7 +430,7 @@ namespace Parameters
       prm.enter_subsection("initial condition");
       {
          prm.declare_entry("function", "none",
-                           Patterns::Selection("none|rt|isenvort|vortsys"),
+                           Patterns::Selection("none|rt|isenvort|vortsys|alfven"),
                            "function for initial condition");
          
          for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)
