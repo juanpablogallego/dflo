@@ -1,6 +1,8 @@
 #ifndef __IC_H__
 #define __IC_H__
 
+//#include <cmath>
+
 #include <deal.II/base/function.h>
 #include <deal.II/lac/vector.h>
 
@@ -88,6 +90,18 @@ private:
    double beta, Rc;
    double a1, a2;
    double x[3], y[3];
+};
+
+//------------------------------------------------------------------------
+// Polarized Alfven  waves
+//------------------------------------------------------------------------
+template <int dim>
+class AlfvenWaves : public dealii::Function<dim>
+{
+public:
+   AlfvenWaves () : dealii::Function<dim>(MHDEquations<dim>::n_components){}
+   virtual void vector_value (const dealii::Point<dim>  &p,
+                              dealii::Vector<double>  &values) const;
 };
 
 //------------------------------------------------------------------------
