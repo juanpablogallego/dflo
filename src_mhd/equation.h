@@ -1587,7 +1587,7 @@ struct MHDEquations
    static const unsigned int momentum_component	      = 0;
    static const unsigned int magnetic_component       = v_components;
    
-   static const unsigned int model = 0;
+   static const unsigned int model = 1;
    
    
    
@@ -1719,6 +1719,7 @@ struct MHDEquations
      for (unsigned int i = 0; i<v_components; i++)
        B_n += std::pow(*(W.begin()+magnetic_component+i),2);
      const number C_A = std::sqrt(B_n/(*(W.begin()+density_component)));
+     //std::cout<<"\nAlfven speed: "<<C_A<<"\n";
      return C_A;
    }
    
@@ -1738,7 +1739,7 @@ struct MHDEquations
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
       number b_2 = 0;
       for(unsigned int d=0; d<v_components; d++)
-	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
+	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
       number C_s = std::sqrt( 0.5*(a_2 + b_2 - std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
@@ -1758,7 +1759,7 @@ struct MHDEquations
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
       number b_2 = 0;
       for(unsigned int d=0; d<v_components; d++)
-	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
+	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
       number C_s = std::sqrt( 0.5*(a_2 + b_2 - std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
@@ -1785,7 +1786,7 @@ struct MHDEquations
 
       number b_2 = 0;
       for(unsigned int d=0; d<v_components; d++)
-	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
+	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
       //if(isnan(b_2)) std::cout<<"\n\t b_2 is nan in the fast speed";
 
@@ -1812,7 +1813,7 @@ struct MHDEquations
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
       number b_2 = 0;
       for(unsigned int d=0; d<v_components; d++)
-	b_2 = (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
+	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
       number C_f = std::sqrt( 0.5*(a_2 + b_2 + std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
@@ -1888,7 +1889,7 @@ struct MHDEquations
    sound_speed (const InputVector &W)
    {
       typedef typename InputVector::value_type number;
-      number C_f;
+      number C_f=0;
       
       if(model == 0)
       {

@@ -86,7 +86,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
 
 	 // divB : This should be done better
 	 if((c>=MHDEquations<dim>::magnetic_component)&&
-	    (c<MHDEquations<dim>::density_component))
+	    (c<MHDEquations<dim>::magnetic_component + dim))
 	 {
 	   unsigned int d = c-MHDEquations<dim>::magnetic_component;
 	   divB += current_solution(dof_indices[i]) *
@@ -137,7 +137,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
                 fe_v.JxW(point);
 	 
 	 // Powell terms WARNING: Check if it works
-	 F_i -= powellcoef[point][component_i] *
+	 F_i += powellcoef[point][component_i] *
                 fe_v.shape_value_component(i, point, component_i) *
                 fe_v.JxW(point) *
                 divB;

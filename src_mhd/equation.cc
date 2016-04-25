@@ -185,7 +185,7 @@ EulerEquations<dim>::Postprocessor::n_output_variables () const
 //***********************************************************************
 
 template <int dim>
-const double MHDEquations<dim>::gas_gamma = 1.4;
+const double MHDEquations<dim>::gas_gamma = 5.0/3.0;
 
 template <int dim>
 MHDEquations<dim>::Postprocessor::
