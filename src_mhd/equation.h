@@ -1782,13 +1782,13 @@ struct MHDEquations
       const number C_a = alfven_speed(W, normal);
 
       const number a_2 = gas_gamma * pressure / (*(W.begin()+density_component));
-      //if(isnan(a_2)) std::cout<<"\n\t a_2 is nan in the fast speed";
+      if(isnan(a_2)) std::cout<<"\n\t a_2 is nan in the fast speed";
 
       number b_2 = 0;
       for(unsigned int d=0; d<v_components; d++)
 	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
-      //if(isnan(b_2)) std::cout<<"\n\t b_2 is nan in the fast speed";
+      if(isnan(b_2)) std::cout<<"\n\t b_2 is nan in the fast speed";
 
       number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a;
       number radical2 = 0.5*(a_2 + b_2 + std::sqrt(radical1));
@@ -1837,7 +1837,7 @@ struct MHDEquations
       velocity = std::sqrt(velocity) / (*(W.begin()+density_component));
 
       number C_f = fast_speed(W, normal);
-      return fabs(velocity) + C_f;
+      return fabs(velocity) + fabs(C_f);
    }
    
    // In case we need to compute it over the mean values
@@ -1854,7 +1854,7 @@ struct MHDEquations
       velocity = std::sqrt(velocity) / (*(W.begin()+density_component));
 
       number C_f = fast_speed(W);
-      return (fabs(velocity) + C_f );
+      return fabs(velocity) + fabs(C_f);
    }
    
    //---------------------------------------------------------------------------
@@ -1875,11 +1875,11 @@ struct MHDEquations
       /*if(isnan(velocity))
 	std::cout<<"\n\t Velocity is nan in the max eigenvalue normal density = "<<W[density_component];//*/
 
-      number C_f = std::fabs(fast_speed(W,normal));
+      number C_f = fast_speed(W,normal);
       /*if(isnan(C_f))
 	std::cout<<"\n\t Fast speed is nan in the max eigenvalue normal";//*/
 
-      return fabs(velocity) + C_f;
+      return fabs(velocity) + fabs(C_f);
    }
    
    // In case we need to compute it over the mean values
@@ -1899,7 +1899,7 @@ struct MHDEquations
       else
       {
 	C_f = fast_speed(W);
-	return  C_f;
+	return  fabs(C_f);
       }
    }
    
@@ -1919,18 +1919,19 @@ struct MHDEquations
       // momentum terms:
       const number pressure = compute_pressure<number> (W);
       const number magnetic_pressure = compute_magnetic_pressure<number> (W);
+      number density_1=1/W[density_component];
       
       // Compute the flux function for the momentum
       for (unsigned int i=0; i<v_components; ++i)
       {
 	for (unsigned int j=0; j<dim; ++j)
 	{
-            flux[momentum_component+i][j] = W[momentum_component+i]*W[momentum_component+j]/W[density_component]
-					    + W[magnetic_component+i]*W[magnetic_component+j];
+            flux[momentum_component+i][j] = W[momentum_component+i]*W[momentum_component+j]*density_1
+					    - W[magnetic_component+i]*W[magnetic_component+j];
 	if(i==j)
-	  flux[momentum_component+i][momentum_component+j] += pressure + magnetic_pressure;
+	  flux[momentum_component+i][j] += pressure + magnetic_pressure;
 	
-	/*if(isnan(flux[momentum_component+i][momentum_component+j]))
+	if(isnan(flux[momentum_component+i][momentum_component+j]))
 	  std::cout<<"\n\t flux function is NaN";//*/
 	
 	}
@@ -1968,19 +1969,20 @@ struct MHDEquations
       number udotB = 0;
       for (unsigned int i=0; i<v_components;++i)
 	udotB += W[momentum_component+i] * W[magnetic_component+i];
+      udotB/=W[density_component];
       
       if(model==0)
 	number udotB = 0;
 
       // Flux function for the conservation of energy
       for (unsigned int i=0; i<dim; ++i)
-         flux[energy_component][i] = W[momentum_component+i] / W[density_component] *
+         flux[energy_component][i] = W[momentum_component+i] * density_1 *
                                      (W[energy_component] + pressure + magnetic_pressure)
-                                     - W[i]*udotB;
+                                     - W[magnetic_component+i]*udotB;
    }
    
    //---------------------------------------------------------------------------
-   // Compute cartesian components of flux
+   // Compute Powell Terms
    //---------------------------------------------------------------------------
    template <typename InputVector, typename number>
    static
@@ -1990,6 +1992,7 @@ struct MHDEquations
      number density_1=1/W[density_component];
      number velocity;
      
+     flux[density_component] = 0;
      flux[energy_component] = 0;
      for (unsigned int i=0; i<v_components; ++i)
      {
@@ -1998,12 +2001,12 @@ struct MHDEquations
        // Powell terms for the momentum components
        flux[momentum_component + i] = W[magnetic_component + i]; //*divB;
        // Powell terms for the magnetic components
-       flux[magnetic_component + i] = velocity; //*divB;
-       
-       flux[energy_component] += velocity * W[magnetic_component + i];
+       flux[magnetic_component + i] = velocity;
+     //}
+     //for (unsigned int i=0; i<dim; ++i)
+     //{ 
+       flux[energy_component] += W[momentum_component+i]*density_1*W[magnetic_component + i]; //velocity
      }
-     // Powell terms for the energy component
-     //flux[energy_component] *= divB;
      
    }
    
@@ -2165,52 +2168,10 @@ struct MHDEquations
       // Maximum eigenvalue at cell face
       number lambda_plus = max_eigenvalue_normal(Aplus, normal);
       number lambda_minus = max_eigenvalue_normal(Aminus, normal);
-      number lambda = std::max(lambda_plus, lambda_minus);
-      /*if(isnan(lambda)||isnan(lambda_minus)||isnan(lambda_plus))
+      number lambda = std::max(lambda_plus, lambda_minus);//*/
+      if(isnan(lambda)||isnan(lambda_minus)||isnan(lambda_plus))
 	std::cout<<"\n \t Numerical flux problem lambda = "<<lambda<<"\t lambda_minus = "<<lambda_minus
 		 << "\t lambda_plus = "<< lambda_plus;//*/
-
-      // Normal velocity
-      /*number vdotn_plus=0, vdotn_minus=0;
-      
-      for(unsigned int d=0; d<dim; ++d)
-      {
-         vdotn_plus  += Wplus[d]  * normal[d];
-         vdotn_minus += Wminus[d] * normal[d];
-      }
-      
-      vdotn_plus  /= Wplus [density_component];
-      vdotn_minus /= Wminus[density_component];
-      
-      // pressure
-      number p_plus, p_minus;
-
-      p_plus  = compute_pressure<number> (Wplus);
-      p_minus = compute_pressure<number> (Wminus);
-      
-      // Maximum eigenvalue at cell face
-      number lambda_plus = max_eigenvalue (Aplus, normal);
-      number lambda_minus = max_eigenvalue (Aminus, normal);
-      number lambda = std::max(lambda_plus, lambda_minus);
-      
-      // Momentum flux
-      for (unsigned int d=0; d<dim; ++d)
-         normal_flux[d] = 0.5 * ( p_plus  * normal[d] + Wplus [d] * vdotn_plus +
-                                  p_minus * normal[d] + Wminus[d] * vdotn_minus );
-	 
-      // Magnetic flux
-      for (unsigned int d=dim; d<2*dim; ++d)
-         normal_flux[d] = 0.5 * ( p_plus  * normal[d] + Wplus [d] * vdotn_plus +
-                                  p_minus * normal[d] + Wminus[d] * vdotn_minus );
-
-      // Density flux
-      normal_flux[density_component] = 0.5 * (Wplus [density_component] * vdotn_plus +
-                                              Wminus[density_component] * vdotn_minus);
-      
-      // Energy flux
-      normal_flux[energy_component] = 0.5 * ((Wplus [energy_component] + p_plus)  * vdotn_plus +
-                                             (Wminus[energy_component] + p_minus) * vdotn_minus);
-      //*/
       
       // Dissipation flux
       for (unsigned int c=0; c<n_components; ++c)
