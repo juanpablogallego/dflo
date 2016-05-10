@@ -54,7 +54,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    
    // Powell Coeficients of the divergence divB
    typedef double PowellCoef[MHDEquations<dim>::n_components];
-   PowellCoef *powellcoef = new PowellCoef[n_q_points];
+   PowellCoef *powellcoef = new PowellCoef[n_q_points];//*/
    
    //std::vector<Vector<double> > ext_force_values(n_q_points, Vector<double>(dim));
    std::vector<Vector<double> > ext_force_values(n_q_points,
@@ -101,7 +101,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
       MHDEquations<dim>::compute_flux_matrix (W[q], flux[q]);
       MHDEquations<dim>::compute_forcing_vector (W[q], ext_force_values[q], forcing[q]);
       if(parameters.add_powell_terms)
-	MHDEquations<dim>::powell_terms(W[q], powellcoef[q]);
+	MHDEquations<dim>::powell_terms(W[q], powellcoef[q]);//*/
    }
    
    
@@ -137,10 +137,10 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
                 fe_v.JxW(point);
 	 
 	 // Powell terms WARNING: Check if it works
-	 F_i += powellcoef[point][component_i] *
+	 F_i -= powellcoef[point][component_i] *
                 fe_v.shape_value_component(i, point, component_i) *
                 fe_v.JxW(point) *
-                divB;
+                divB;//*/
       }
       
       local_vector (i) -= F_i;
@@ -206,6 +206,10 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
    typedef double NormalFlux[MHDEquations<dim>::n_components];
    NormalFlux *normal_fluxes = new NormalFlux[n_q_points];
    
+   // Powell Coeficients of the divergence divB
+   typedef double PowellCoef[MHDEquations<dim>::n_components];
+   PowellCoef *powellcoef = new PowellCoef[n_q_points];//*/
+   
    //****************************************************
    //	IN CASE OF PERIODIC BOUDNARY CONDITIONS
    //****************************************************
@@ -244,11 +248,6 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
       std::vector<types::global_dof_index> dof_indices_n (dofs_per_cell_neighbor);
       n_cell_dof->get_dof_indices (dof_indices_n);
       
-      // Compute fluxes at the periodic boundary
-      Table<2,double>
-      Wplus  (n_q_points, MHDEquations<dim>::n_components),
-      Wminus (n_q_points, MHDEquations<dim>::n_components);
-      
       // Wminus is Neighbouring cell value
       for (unsigned int q=0; q<n_q_points; ++q)
       {
@@ -256,6 +255,7 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
          {
             Wplus[q][c] = 0.0;
             Wminus[q][c] = 0.0;
+	    powellcoef[q][c] = 0.0;
          }
          for (unsigned int i=0; i<dofs_per_cell; ++i)
          {
@@ -282,6 +282,19 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
                                cell_average[cell_no],
                                cell_average[n_cell_no],
                                normal_fluxes[q]);
+	 
+	 // Powell terms of the divergence divB at the boundaries
+	 if(parameters.add_powell_terms)
+	 {
+	   unsigned int mk=MHDEquations<dim>::magnetic_component;
+	   double deltaB = 0.0;
+	   
+	   MHDEquations<dim>::powell_terms(Wplus[q], powellcoef[q]);
+	   for(unsigned int d=0; d<dim; d++)
+	     deltaB+=(Wminus[q1][mk+d]-Wplus[q][mk+d])*fe_v.normal_vector(q)[d];
+	   for(unsigned int c=0; c<MHDEquations<dim>::n_components; c++)
+	     normal_fluxes[q][c]+=0.5*deltaB*powellcoef[q][c];
+	 }//*/
       }
       
    }
@@ -302,6 +315,7 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
          Wplus[q][c] = 0.0;
          /*for(unsigned int d=0; d<dim; ++d)
             grad_Wplus[q][c][d] = 0.0;*/
+	 powellcoef[q][c] = 0;
       }
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
@@ -346,8 +360,21 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
                             Aplus,
                             Aminus,
                             normal_fluxes[q]);
+      
+      // Powell terms of the divergence divB at the boundaries
+      if(parameters.add_powell_terms)
+      {
+	unsigned int mk=MHDEquations<dim>::magnetic_component;
+	double deltaB = 0;
+	
+	MHDEquations<dim>::powell_terms(Wplus[q], powellcoef[q]);
+	for(unsigned int d=0; d<dim; d++)
+	  deltaB+=(Wminus[q][mk+d]-Wplus[q][mk+d])*fe_v.normal_vector(q)[d];
+	for(unsigned int c=0; c<MHDEquations<dim>::n_components; c++)
+	  normal_fluxes[q][c]+=0.5*deltaB*powellcoef[q][c];
+      }//*/
    }
-}
+  }
    
    
    // Now assemble the face term
@@ -389,6 +416,7 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
       }
    
    delete[] normal_fluxes;
+   delete[] powellcoef;
 
 }
 
@@ -444,6 +472,10 @@ void ConservationLaw<dim>::integrate_face_term_explicit
    typedef double NormalFlux[MHDEquations<dim>::n_components];
    NormalFlux *normal_fluxes = new NormalFlux[n_q_points];
    
+   // Powell Coeficients of the divergence divB
+   typedef double PowellCoef[MHDEquations<dim>::n_components];
+   PowellCoef *powellcoef = new PowellCoef[n_q_points];//*/
+   
    // Wminus is Neighbouring cell value
    for (unsigned int q=0; q<n_q_points; ++q)
    {
@@ -456,6 +488,8 @@ void ConservationLaw<dim>::integrate_face_term_explicit
          Wminus[q][c] = 0.0;
          /*for(unsigned int d=0; d<dim; ++d)
           grad_Wminus[q][c][d] = 0.0;*/
+	 
+	 powellcoef[q][c] = 0.0;
       }
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
@@ -483,6 +517,19 @@ void ConservationLaw<dim>::integrate_face_term_explicit
                             cell_average[cell_no],
                             cell_average[neighbor_cell_no],
                             normal_fluxes[q]);
+      
+      // Powell terms of the divergence divB at the boundaries
+      if(parameters.add_powell_terms)
+      {
+	unsigned int mk=MHDEquations<dim>::magnetic_component;
+	double deltaB = 0;
+	
+	MHDEquations<dim>::powell_terms(Wplus[q], powellcoef[q]);
+	for(unsigned int d=0; d<dim; d++)
+	  deltaB+=(Wminus[q][mk+d]-Wplus[q][mk+d])*fe_v.normal_vector(q)[d];
+	for(unsigned int c=0; c<MHDEquations<dim>::n_components; c++)
+	  normal_fluxes[q][c]+=0.5*deltaB*powellcoef[q][c];
+      }//*/
    }
    
    // Now assemble the face term
@@ -568,6 +615,7 @@ void ConservationLaw<dim>::integrate_face_term_explicit
       }
    
    delete[] normal_fluxes;
+   delete[] powellcoef;
 
 }
 
