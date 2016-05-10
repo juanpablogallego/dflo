@@ -111,11 +111,14 @@ void AlfvenWaves<dim>::vector_value (const Point<dim> &p,
 {
    double theta = atan(2.0);
    const double gamma = MHDEquations<dim>::gas_gamma;
-   double x1= p[0]*std::cos(theta) + p[1]*std::sin(theta);
-   double a_2pix1 = 2*M_PI*x1;
-   double rho = 1, pre = 0.1,
-	  vex = 0, vey = 0.1*std::sin(a_2pix1), vez = 0.1*std::cos(a_2pix1),
-	  bx  = 1, by  = 0.1*std::sin(a_2pix1), bz  = 0.1*std::cos(a_2pix1);
+   double a_2pix1 = 2*M_PI*(p[0]*std::cos(theta) + p[1]*std::sin(theta));
+   double rho = 1.0, pre = 0.1,
+	  vex = 0.0,
+	  vey = 0.1*std::sin(a_2pix1),
+	  vez = 0.1*std::cos(a_2pix1),
+	  bx  = 1.0,
+	  by  = 0.1*std::sin(a_2pix1),
+	  bz  = 0.1*std::cos(a_2pix1);
    
    values[MHDEquations<dim>::momentum_component]   = rho * vex;
    values[MHDEquations<dim>::momentum_component+1] = rho * vey;
