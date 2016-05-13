@@ -343,6 +343,8 @@ void ConservationLaw<dim>::setup_system ()
    right_hand_side.reinit 	(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
    newton_update.reinit 	(locally_owned_dofs, mpi_communicator);
    
+   //divB.reinit 		(locally_owned_dofs, mpi_communicator);
+   
    cell_average.resize 		(triangulation.n_active_cells(),
 							       Vector<double>(MHDEquations<dim>::n_components));
    

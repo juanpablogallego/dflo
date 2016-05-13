@@ -1715,10 +1715,11 @@ struct MHDEquations
 
    {
      typedef typename InputVector::value_type number;
-     number B_n = 0;
-     for (unsigned int i = 0; i<v_components; i++)
-       B_n += std::pow(*(W.begin()+magnetic_component+i),2);
-     const number C_A = std::sqrt(B_n/(*(W.begin()+density_component)));
+     number B_n = std::fabs(*(W.begin()+magnetic_component));
+     for (unsigned int i = 1; i<v_components; i++)
+       B_n = std::min(B_n, std::fabs(*(W.begin()+magnetic_component+i)));
+     
+     const number C_A = B_n/std::sqrt((*(W.begin()+density_component)));
      //std::cout<<"\nAlfven speed: "<<C_A<<"\n";
      return C_A;
    }
@@ -1742,7 +1743,12 @@ struct MHDEquations
 	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
-      number C_s = std::sqrt( 0.5*(a_2 + b_2 - std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
+      number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
+      number radical2 =  0.5*(a_2 + b_2 - std::sqrt(radical1));
+      number C_s = std::sqrt(radical2);
+      if(isnan(C_s))
+	std::cout<<"\n\t The Slow speed is NaN. mx="<<*(W.begin())<<", my="<<*(W.begin()+1)<<", e="<<*(W.begin()+energy_component)
+		 <<", bx="<<*(W.begin()+dim)<<", by="<<*(W.begin()+1)<<", density="<<*(W.begin()+density_component);//*/
       return C_s;
    }
    
@@ -1762,7 +1768,12 @@ struct MHDEquations
 	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
-      number C_s = std::sqrt( 0.5*(a_2 + b_2 - std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
+            number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
+      number radical2 =  0.5*(a_2 + b_2 - std::sqrt(radical1));
+      number C_s = std::sqrt(radical2);
+      if(isnan(C_s))
+	std::cout<<"\n\t The Slow speed is NaN. mx="<<*(W.begin())<<", my="<<*(W.begin()+1)<<", e="<<*(W.begin()+energy_component)
+		 <<", bx="<<*(W.begin()+dim)<<", by="<<*(W.begin()+1)<<", density="<<*(W.begin()+density_component);//*/
       return C_s;
    }
    
@@ -1790,7 +1801,7 @@ struct MHDEquations
       b_2 /= (*(W.begin()+density_component));
       if(isnan(b_2)) std::cout<<"\n\t b_2 is nan in the fast speed";
 
-      number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a;
+      number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
       number radical2 = 0.5*(a_2 + b_2 + std::sqrt(radical1));
       number C_f = std::sqrt(radical2);
       /*if(isnan(C_f))
@@ -1816,8 +1827,43 @@ struct MHDEquations
 	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
-      number C_f = std::sqrt( 0.5*(a_2 + b_2 + std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a)));
+      number C_f = std::sqrt( 0.5*(a_2 + b_2 + std::sqrt((a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a)));
       return C_f;
+   }
+   
+   //---------------------------------------------------------------------------
+   // Check speeds orders
+   //---------------------------------------------------------------------------
+   template <typename InputVector>
+   static
+   void 
+   check_speeds_order (const InputVector &W,
+		   const dealii::Tensor<1,dim> &normal)
+   {
+     typedef typename InputVector::value_type number;
+     number C_a=alfven_speed(W,normal);
+     number C_s=slow_speed(W,normal);
+     number C_f=fast_speed(W,normal);
+     if(!((C_a<C_f)||(C_s<C_a)))
+       std::cout<<"\n\t (Vectorial) Order of speed invalid! \t C_s: "<<C_s<<", C_a: "<<C_a<<", C_f: "<<C_f<<" \n";
+     
+   }
+   
+   //---------------------------------------------------------------------------
+   // Check speeds orders
+   //---------------------------------------------------------------------------
+   template <typename InputVector>
+   static
+   void 
+   check_speeds_order (const InputVector &W)
+   {
+     typedef typename InputVector::value_type number;
+     number C_a=alfven_speed(W);
+     number C_s=slow_speed(W);
+     number C_f=fast_speed(W);
+     if(!((C_a<C_f)||(C_s<C_a)))
+       std::cout<<"\n\t (Scalar) Order of speed invalid! \t C_s: "<<C_s<<", C_a: "<<C_a<<", C_f: "<<C_f<<" \n";
+     
    }
    
    //---------------------------------------------------------------------------
@@ -1867,6 +1913,8 @@ struct MHDEquations
                    const dealii::Tensor<1,dim> &normal)
    {
       typedef typename InputVector::value_type number;
+      
+      check_speeds_order(W, normal);
 
       number velocity = 0;
       for(unsigned int d=0; d<dim; ++d)
@@ -1898,6 +1946,7 @@ struct MHDEquations
       }
       else
       {
+	check_speeds_order(W);
 	C_f = fast_speed(W);
 	return  fabs(C_f);
       }
