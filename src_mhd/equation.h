@@ -1644,7 +1644,8 @@ struct MHDEquations
       number kinetic_energy = 0;
       // Momentum variables
       for (unsigned int d=0; d<v_components; ++d)
-         kinetic_energy += *(W.begin()+momentum_component+d) * *(W.begin()+momentum_component+d);
+         kinetic_energy += (*(W.begin()+momentum_component+d))*
+			   (*(W.begin()+momentum_component+d));
       kinetic_energy *= 0.5/(*(W.begin() + density_component));
       return kinetic_energy;
    }
@@ -1661,8 +1662,8 @@ struct MHDEquations
       if (model == 0)
 	return magnetic_pressure;
       for (unsigned int d=0; d<v_components; ++d)
-         magnetic_pressure += *(W.begin()+magnetic_component+d) *
-                              *(W.begin()+magnetic_component+d);
+         magnetic_pressure += (*(W.begin()+magnetic_component+d))*
+			      (*(W.begin()+magnetic_component+d));
       magnetic_pressure*=0.5;
       return magnetic_pressure;
    }
@@ -1746,9 +1747,9 @@ struct MHDEquations
       number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
       number radical2 =  0.5*(a_2 + b_2 - std::sqrt(radical1));
       number C_s = std::sqrt(radical2);
-      if(isnan(C_s))
-	std::cout<<"\n\t The Slow speed is NaN. mx="<<*(W.begin())<<", my="<<*(W.begin()+1)<<", e="<<*(W.begin()+energy_component)
-		 <<", bx="<<*(W.begin()+dim)<<", by="<<*(W.begin()+1)<<", density="<<*(W.begin()+density_component);//*/
+      /*if(isnan(C_s))
+	std::cout<<"\n\t The Slow speed is NaN. r1="<<radical1<<", r2="<<radical2<<", C_a="<<C_a
+		 <<", a2="<<a_2<<", b2="<<b_2;//*/
       return C_s;
    }
    
@@ -1768,12 +1769,12 @@ struct MHDEquations
 	b_2 += (*(W.begin()+magnetic_component+d))* (*(W.begin()+magnetic_component+d));
       b_2 /= (*(W.begin()+density_component));
 
-            number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
+      number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
       number radical2 =  0.5*(a_2 + b_2 - std::sqrt(radical1));
       number C_s = std::sqrt(radical2);
-      if(isnan(C_s))
-	std::cout<<"\n\t The Slow speed is NaN. mx="<<*(W.begin())<<", my="<<*(W.begin()+1)<<", e="<<*(W.begin()+energy_component)
-		 <<", bx="<<*(W.begin()+dim)<<", by="<<*(W.begin()+1)<<", density="<<*(W.begin()+density_component);//*/
+      /*if(isnan(C_s))
+	std::cout<<"\n\t The Slow speed is NaN. r1="<<radical1<<", r2="<<radical2<<", C_a="<<C_a
+		 <<", a2="<<a_2<<", b2="<<b_2;//*/
       return C_s;
    }
    
@@ -2021,7 +2022,7 @@ struct MHDEquations
       udotB/=W[density_component];
       
       if(model==0)
-	number udotB = 0;
+	udotB = 0;
 
       // Flux function for the conservation of energy
       for (unsigned int i=0; i<dim; ++i)

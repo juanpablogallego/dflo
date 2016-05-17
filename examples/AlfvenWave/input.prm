@@ -4,8 +4,8 @@
 # The input grid 
 set mesh type = gmsh
 set mesh file = grid.msh
-set degree = 2
-set basis = Pk
+set degree = 0
+set basis = Qk
 set mapping = cartesian
 
 # Stabilization parameter
@@ -55,7 +55,7 @@ end
 # Time stepping control
 subsection time stepping
   set time step type = global
-  set cfl = 0.9
+  set cfl = 0.1
   set final time = 5.0
   set nonlinear iterations = 1
 end
@@ -63,12 +63,13 @@ end
 subsection linear solver
   set output         = quiet
   set method         = rk3
+  set add_powell_terms = true
 end
 
 # --------------------------------------------------
 # Output frequency and kind
 subsection output
-  set iter step      = 1
+  set iter step      = 20
   set schlieren plot = true
   set format         = vtk #tecplot
 #  set compute angular momentum = 1

@@ -1,7 +1,10 @@
-ny = 20;
-nx = 2*ny;
-lx = Sqrt(5);
-ly = 0.5*lx;
+ny = 128;
+nx = 128;
+//lx = Sqrt(5);
+//ly = 0.5*lx;
+
+lx = 1;
+ly = 1;
 
 Point(1) = { 0,  0, 0};
 Point(2) = {lx,  0, 0};
