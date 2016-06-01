@@ -109,12 +109,12 @@ template <int dim>
 void AlfvenWaves<dim>::vector_value (const Point<dim> &p,
                                       Vector<double>   &values) const
 {
-   double theta = 0; //std::atan(2.0);
+   double theta = std::atan(0.5);
    const double gamma = MHDEquations<dim>::gas_gamma;
    double a_2pix1 = 2*M_PI*(p[0]*std::cos(theta) + p[1]*std::sin(theta));
    // Parallel (p) and Orthogonal (o) Variables
    double Bp=1.0,
-	  Bo=0.05*std::sin(a_2pix1),
+	  Bo=0.1*std::sin(a_2pix1),
 	  Vp=0.0,
 	  Vo=0.1*std::sin(a_2pix1);
    // Cartesian coordinates
