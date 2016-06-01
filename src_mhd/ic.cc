@@ -102,6 +102,43 @@ void VortexSystem<dim>::vector_value (const Point<dim> &p,
 }
 
 //--------------------------------------------------------------------------------------------
+// Initial condition for Polarized Alfven  waves.
+// This is setup for 2-d case only
+//--------------------------------------------------------------------------------------------
+template <int dim>
+void AlfvenWaves<dim>::vector_value (const Point<dim> &p,
+                                      Vector<double>   &values) const
+{
+   double theta = std::atan(0.5);
+   const double gamma = MHDEquations<dim>::gas_gamma;
+   double a_2pix1 = 2*M_PI*(p[0]*std::cos(theta) + p[1]*std::sin(theta));
+   // Parallel (p) and Orthogonal (o) Variables
+   double Bp=1.0,
+	  Bo=0.1*std::sin(a_2pix1),
+	  Vp=0.0,
+	  Vo=0.1*std::sin(a_2pix1);
+   // Cartesian coordinates
+   double rho = 1.0, pre = 0.1,
+	  vex = Vp*std::cos(theta) - Vo*std::sin(theta),
+	  vey = Vp*std::sin(theta) + Vo*std::cos(theta),
+	  vez = 0.1*std::cos(a_2pix1),
+	  bx  = Bp*std::cos(theta) - Bo*std::sin(theta),
+	  by  = Bp*std::sin(theta) + Bo*std::cos(theta),
+	  bz  = 0.1*std::cos(a_2pix1);
+   
+   values[MHDEquations<dim>::momentum_component]   = rho * vex;
+   values[MHDEquations<dim>::momentum_component+1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component+2] = rho * vez;
+   values[MHDEquations<dim>::magnetic_component]   = bx;
+   values[MHDEquations<dim>::magnetic_component+1] = by;
+   values[MHDEquations<dim>::magnetic_component+2] = bz;
+   values[MHDEquations<dim>::density_component]    = rho;
+   values[MHDEquations<dim>::energy_component]     = pre/(gamma-1.0)
+						     + 0.5 * rho * (vex*vex + vey*vey + vez*vez)
+						     + 0.5 * (bx*bx + by*by + bz*bz);
+}
+
+//--------------------------------------------------------------------------------------------
 // Keplerian disk
 // TODO TO BE COMPLETED
 //--------------------------------------------------------------------------------------------
@@ -151,6 +188,9 @@ void ConservationLaw<dim>::set_initial_condition_Qk ()
    else if(parameters.ic_function == "vortsys")
       VectorTools::interpolate(mapping(), dof_handler,
                                VortexSystem<dim>(), old_solution);
+   else if(parameters.ic_function == "alfven")
+      VectorTools::interpolate(mapping(), dof_handler,
+                               AlfvenWaves<dim>(), old_solution);
    else
       VectorTools::interpolate(mapping(), dof_handler,
                                parameters.initial_conditions, old_solution);
@@ -169,6 +209,7 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
    RayleighTaylor<dim> rayleigh_taylor(parameters.gravity);
    IsentropicVortex<dim> isentropic_vortex(0.5, 0.0, 5.0, 0.0, 0.0);
    VortexSystem<dim> vortex_system;
+   AlfvenWaves<dim> alfven;
    Function<dim>* ic_function;
    if(parameters.ic_function == "rt")
       ic_function = &rayleigh_taylor;
@@ -176,6 +217,8 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
       ic_function = &isentropic_vortex;
    else if(parameters.ic_function == "vortsys")
       ic_function = &vortex_system;
+   else if(parameters.ic_function == "alfven")
+      ic_function = &alfven;
    else
       ic_function = &parameters.initial_conditions;
 
@@ -193,7 +236,7 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
      n_comp=MHDEquations<dim>::n_components;//*/
 
    std::vector< Vector<double> > ic_values(n_q_points, 
-										   Vector<double>(MHDEquations<dim>::n_components));
+					   Vector<double>(MHDEquations<dim>::n_components));
 
    old_solution = 0.0;
 

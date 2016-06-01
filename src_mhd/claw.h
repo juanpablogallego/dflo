@@ -265,6 +265,8 @@ private:
    LA::Vector<double>			    right_hand_side;
    LA::Vector<double>			    newton_update;
    
+   //LA::Vector<double>			    divB;
+   
    std::vector< dealii::Vector<double> >	    cell_average;  
    dealii::Vector<double>       dt;
    dealii::Vector<double>       mu_shock;

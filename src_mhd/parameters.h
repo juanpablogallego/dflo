@@ -165,6 +165,9 @@ namespace Parameters
       enum System_model {euler, mhd};
       System_model model;
       
+      // Add Powell terms flag
+      bool add_powell_terms;
+      
       double linear_residual;
       int max_iterations;
       

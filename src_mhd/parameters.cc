@@ -15,11 +15,14 @@ namespace Parameters
                            Patterns::Selection("quiet|verbose"),
                            "State whether output from solver runs should be printed. "
                            "Choices are <quiet|verbose>.");
-         prm.declare_entry("model", "euler",
+         prm.declare_entry("model", "mhd",
                            Patterns::Selection("euler|mhd"),
                            "Select the system of equations to solve "
                            "Choices are <euler|mhd>.");
-	     prm.declare_entry("method", "rk3",
+         prm.declare_entry("add_powell_terms", "false",
+                           Patterns::Bool(),
+                           "Whether adding or not  Powell terms to the numerical scheme ");
+	 prm.declare_entry("method", "rk3",
                            Patterns::Selection("gmres|direct|umfpack|rk3|mood"),
                            "The kind of solver for the linear system. "
                            "Choices are <gmres|direct|umfpack|rk3|mood>.");
@@ -63,7 +66,7 @@ namespace Parameters
             model = euler;
          if (eq == "mhd")
             model = mhd;
-         
+
          const std::string sv = prm.get("method");
          if (sv == "direct")
          {
@@ -91,6 +94,7 @@ namespace Parameters
             implicit = false;
          }
          
+         add_powell_terms= prm.get_bool ("add_powell_terms");
          linear_residual = prm.get_double("residual");
          max_iterations  = prm.get_integer("max iters");
          ilut_fill       = prm.get_double("ilut fill");
@@ -426,7 +430,7 @@ namespace Parameters
       prm.enter_subsection("initial condition");
       {
          prm.declare_entry("function", "none",
-                           Patterns::Selection("none|rt|isenvort|vortsys"),
+                           Patterns::Selection("none|rt|isenvort|vortsys|alfven"),
                            "function for initial condition");
          
          for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)

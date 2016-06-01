@@ -185,7 +185,7 @@ EulerEquations<dim>::Postprocessor::n_output_variables () const
 //***********************************************************************
 
 template <int dim>
-const double MHDEquations<dim>::gas_gamma = 1.4;
+const double MHDEquations<dim>::gas_gamma = 5.0/3.0;
 
 template <int dim>
 MHDEquations<dim>::Postprocessor::
@@ -217,9 +217,9 @@ compute_derived_quantities_vector (const std::vector<Vector<double> >           
            ExcInternalError());
    
    if (do_schlieren_plot == true)
-      Assert (computed_quantities[0].size() == dim+2, ExcInternalError())
+      Assert (computed_quantities[0].size() == dim+3, ExcInternalError())
       else
-         Assert (computed_quantities[0].size() == dim+1, ExcInternalError());
+         Assert (computed_quantities[0].size() == dim+2, ExcInternalError());
    
 
    for (unsigned int q=0; q<n_quadrature_points; ++q)
@@ -230,9 +230,10 @@ compute_derived_quantities_vector (const std::vector<Vector<double> >           
          computed_quantities[q](d) = uh[q](d) / density;
       
       computed_quantities[q](dim) = compute_pressure<double> (uh[q]);
-      
+      computed_quantities[q](dim+1) = duh[q][magnetic_component][0] +
+                                      duh[q][magnetic_component+1][1];
       if (do_schlieren_plot == true)
-         computed_quantities[q](dim+1) = duh[q][density_component] *
+         computed_quantities[q](dim+2) = duh[q][density_component] *
                                          duh[q][density_component];
    }
 }
@@ -251,6 +252,7 @@ MHDEquations<dim>::Postprocessor::get_names () const
   //names.push_back ("YMagnetic");
   //names.push_back ("ZMagnetic");
   names.push_back ("Pressure");
+  names.push_back ("divB");
 
   if (do_schlieren_plot == true)
     names.push_back ("schlieren_plot");
@@ -267,6 +269,9 @@ MHDEquations<dim>::Postprocessor::get_data_component_interpretation () const
     interpretation (dim,
 		    DataComponentInterpretation::component_is_part_of_vector);
 
+  interpretation.push_back (DataComponentInterpretation::
+			    component_is_scalar);
+  // divB
   interpretation.push_back (DataComponentInterpretation::
 			    component_is_scalar);
 
@@ -296,9 +301,9 @@ unsigned int
 MHDEquations<dim>::Postprocessor::n_output_variables () const
 {
   if (do_schlieren_plot == true)
-    return dim+2;
+    return dim+3;
   else
-    return dim+1;
+    return dim+2;
 }
 
 
