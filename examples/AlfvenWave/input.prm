@@ -4,7 +4,7 @@
 # The input grid 
 set mesh type = gmsh
 set mesh file = grid.msh
-set degree = 0
+set degree = 1
 set basis = Qk
 set mapping = cartesian
 
@@ -55,8 +55,8 @@ end
 # Time stepping control
 subsection time stepping
   set time step type = global
-  set cfl = 0.1
-  set final time = 5.0
+  set cfl = 0.5
+  set final time = 2.0
   set nonlinear iterations = 1
 end
 
@@ -79,7 +79,7 @@ end
 # Refinement control
 subsection refinement
   set refinement = false # none only other option
-  set iter step  = 5
+  set iter step  = 1
   set shock value = 1.0
   set shock levels = 3
 end
