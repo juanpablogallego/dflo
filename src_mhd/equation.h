@@ -2187,7 +2187,7 @@ struct MHDEquations
     typename InputVector::value_type (&normal_flux)[n_components]
    )
    {
-      /*typedef typename InputVector::value_type number;
+      typedef typename InputVector::value_type number;
       
       number fluxplus[n_components][dim], fluxminus[n_components][dim];
       compute_flux_matrix (Wplus, fluxplus);
@@ -2215,7 +2215,7 @@ struct MHDEquations
       for (unsigned int c=0; c<n_components; ++c)
          normal_flux[c] += 0.5 * lambda  * (Wplus[c] - Wminus[c]);//*/
 	 
-      typedef typename InputVector::value_type number;
+      /*typedef typename InputVector::value_type number;
 
       // Normal velocity
       number vdotn_plus=0, vdotn_minus=0, bdotn_plus=0, bdotn_minus=0;
