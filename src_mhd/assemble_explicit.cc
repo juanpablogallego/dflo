@@ -215,7 +215,7 @@ void ConservationLaw<dim>::integrate_boundary_term_explicit
    //****************************************************
    
    typename MHDEquations<dim>::BoundaryKind boundCheck = MHDEquations<dim>::periodic;
-   if((boundary_kind==boundCheck))
+   if(boundary_kind == boundCheck)
    {
       // Find the neighbouring cell via map.find(key) and store the face_pair
       FacePair<dim,dim> face_pair;
