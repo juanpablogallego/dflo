@@ -15,7 +15,7 @@ namespace Parameters
                            Patterns::Selection("quiet|verbose"),
                            "State whether output from solver runs should be printed. "
                            "Choices are <quiet|verbose>.");
-         prm.declare_entry("model", "euler",
+         prm.declare_entry("model", "mhd",
                            Patterns::Selection("euler|mhd"),
                            "Select the system of equations to solve "
                            "Choices are <euler|mhd>.");
