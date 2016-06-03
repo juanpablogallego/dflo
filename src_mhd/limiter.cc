@@ -77,7 +77,7 @@ template <int dim>
 void ConservationLaw<dim>::apply_limiter_TVB_Qk ()
 {
    if(fe.degree == 0) return;
-   const unsigned int n_components = EulerEquations<dim>::n_components;
+   const unsigned int n_components = MHDEquations<dim>::n_components;
 
    QGauss<dim> qrule (fe.degree + 1);
    FEValues<dim> fe_values_grad (mapping(), fe, qrule, update_gradients | update_JxW_values);
@@ -179,13 +179,13 @@ void ConservationLaw<dim>::apply_limiter_TVB_Qk ()
          EigMatrix Rx, Lx, Ry, Ly;
          if(parameters.char_lim)
          {
-            EulerEquations<dim>::compute_eigen_matrix (cell_average[c], Rx, Lx, Ry, Ly);
-            EulerEquations<dim>::transform_to_char (Lx, dbx);
-            EulerEquations<dim>::transform_to_char (Lx, dfx);
-            EulerEquations<dim>::transform_to_char (Ly, dby);
-            EulerEquations<dim>::transform_to_char (Ly, dfy);
-            EulerEquations<dim>::transform_to_char (Lx, Dx);
-            EulerEquations<dim>::transform_to_char (Ly, Dy);
+            MHDEquations<dim>::compute_eigen_matrix (cell_average[c], Rx, Lx, Ry, Ly);
+            MHDEquations<dim>::transform_to_char (Lx, dbx);
+            MHDEquations<dim>::transform_to_char (Lx, dfx);
+            MHDEquations<dim>::transform_to_char (Ly, dby);
+            MHDEquations<dim>::transform_to_char (Ly, dfy);
+            MHDEquations<dim>::transform_to_char (Lx, Dx);
+            MHDEquations<dim>::transform_to_char (Ly, Dy);
          }
          
          // Apply minmod limiter
@@ -208,8 +208,8 @@ void ConservationLaw<dim>::apply_limiter_TVB_Qk ()
             Dy_new /= dx;
             if(parameters.char_lim)
             {
-               EulerEquations<dim>::transform_to_con (Rx, Dx_new);
-               EulerEquations<dim>::transform_to_con (Ry, Dy_new);
+               MHDEquations<dim>::transform_to_con (Rx, Dx_new);
+               MHDEquations<dim>::transform_to_con (Ry, Dy_new);
             }
             cell->get_dof_indices(dof_indices);
             fe_values.reinit (cell);
@@ -241,17 +241,17 @@ void ConservationLaw<dim>::apply_limiter_TVB_Pk ()
 {
    if(fe.degree == 0) return;
    
-   Vector<double> dfx (EulerEquations<dim>::n_components);
-   Vector<double> dbx (EulerEquations<dim>::n_components);
-   Vector<double> Dx  (EulerEquations<dim>::n_components);
+   Vector<double> dfx (MHDEquations<dim>::n_components);
+   Vector<double> dbx (MHDEquations<dim>::n_components);
+   Vector<double> Dx  (MHDEquations<dim>::n_components);
    
-   Vector<double> dfy (EulerEquations<dim>::n_components);
-   Vector<double> dby (EulerEquations<dim>::n_components);
-   Vector<double> Dy  (EulerEquations<dim>::n_components);
+   Vector<double> dfy (MHDEquations<dim>::n_components);
+   Vector<double> dby (MHDEquations<dim>::n_components);
+   Vector<double> Dy  (MHDEquations<dim>::n_components);
    
-   Vector<double> Dx_new (EulerEquations<dim>::n_components);
-   Vector<double> Dy_new (EulerEquations<dim>::n_components);
-   Vector<double> avg_nbr (EulerEquations<dim>::n_components);
+   Vector<double> Dx_new (MHDEquations<dim>::n_components);
+   Vector<double> Dy_new (MHDEquations<dim>::n_components);
+   Vector<double> avg_nbr (MHDEquations<dim>::n_components);
    
    std::vector<unsigned int> dof_indices (fe.dofs_per_cell);
    
@@ -298,7 +298,7 @@ void ConservationLaw<dim>::apply_limiter_TVB_Pk ()
          if(lcell[c] != endc0)
          {
             get_cell_average (lcell[c], avg_nbr);
-            for(unsigned int i=0; i<EulerEquations<dim>::n_components; ++i)
+            for(unsigned int i=0; i<MHDEquations<dim>::n_components; ++i)
                dbx(i) = cell_average[c][i] - avg_nbr(i);
          }
          
@@ -307,7 +307,7 @@ void ConservationLaw<dim>::apply_limiter_TVB_Pk ()
          if(rcell[c] != endc0)
          {
             get_cell_average (rcell[c], avg_nbr);
-            for(unsigned int i=0; i<EulerEquations<dim>::n_components; ++i)
+            for(unsigned int i=0; i<MHDEquations<dim>::n_components; ++i)
                dfx(i) = avg_nbr(i) - cell_average[c][i];
          }
          
@@ -316,7 +316,7 @@ void ConservationLaw<dim>::apply_limiter_TVB_Pk ()
          if(bcell[c] != endc0)
          {
             get_cell_average (bcell[c], avg_nbr);
-            for(unsigned int i=0; i<EulerEquations<dim>::n_components; ++i)
+            for(unsigned int i=0; i<MHDEquations<dim>::n_components; ++i)
                dby(i) = cell_average[c][i] - avg_nbr(i);
          }
          
@@ -325,44 +325,44 @@ void ConservationLaw<dim>::apply_limiter_TVB_Pk ()
          if(tcell[c] != endc0)
          {
             get_cell_average (tcell[c], avg_nbr);
-            for(unsigned int i=0; i<EulerEquations<dim>::n_components; ++i)
+            for(unsigned int i=0; i<MHDEquations<dim>::n_components; ++i)
                dfy(i) = avg_nbr(i) - cell_average[c][i];
          }
          
          // Transform to characteristic variables
-         typedef double EigMatrix[EulerEquations<dim>::n_components][EulerEquations<dim>::n_components];
+         typedef double EigMatrix[MHDEquations<dim>::n_components][MHDEquations<dim>::n_components];
          EigMatrix Rx, Lx, Ry, Ly;
          if(parameters.char_lim)
          {
-            EulerEquations<dim>::compute_eigen_matrix (cell_average[c], Rx, Lx, Ry, Ly);
-            EulerEquations<dim>::transform_to_char (Lx, dbx);
-            EulerEquations<dim>::transform_to_char (Lx, dfx);
-            EulerEquations<dim>::transform_to_char (Ly, dby);
-            EulerEquations<dim>::transform_to_char (Ly, dfy);
-            EulerEquations<dim>::transform_to_char (Lx, Dx);
-            EulerEquations<dim>::transform_to_char (Ly, Dy);
+            MHDEquations<dim>::compute_eigen_matrix (cell_average[c], Rx, Lx, Ry, Ly);
+            MHDEquations<dim>::transform_to_char (Lx, dbx);
+            MHDEquations<dim>::transform_to_char (Lx, dfx);
+            MHDEquations<dim>::transform_to_char (Ly, dby);
+            MHDEquations<dim>::transform_to_char (Ly, dfy);
+            MHDEquations<dim>::transform_to_char (Lx, Dx);
+            MHDEquations<dim>::transform_to_char (Ly, Dy);
          }
          
          // Apply minmod limiter
          double change_x = 0;
          double change_y = 0;
-         for(unsigned int i=0; i<EulerEquations<dim>::n_components; ++i)
+         for(unsigned int i=0; i<MHDEquations<dim>::n_components; ++i)
          {
             Dx_new(i) = minmod(Dx(i), beta*dbx(i), beta*dfx(i), Mdx2);
             Dy_new(i) = minmod(Dy(i), beta*dby(i), beta*dfy(i), Mdx2);
             change_x += std::fabs(Dx_new(i) - Dx(i));
             change_y += std::fabs(Dy_new(i) - Dy(i));
          }
-         change_x /= EulerEquations<dim>::n_components;
-         change_y /= EulerEquations<dim>::n_components;
+         change_x /= MHDEquations<dim>::n_components;
+         change_y /= MHDEquations<dim>::n_components;
          
          // If limiter is active, reduce polynomial to linear
          if(change_x + change_y > 1.0e-10)
          {
             if(parameters.char_lim)
             {
-               EulerEquations<dim>::transform_to_con (Rx, Dx_new);
-               EulerEquations<dim>::transform_to_con (Ry, Dy_new);
+               MHDEquations<dim>::transform_to_con (Rx, Dx_new);
+               MHDEquations<dim>::transform_to_con (Ry, Dy_new);
             }
             if(parameters.conserve_angular_momentum)
             {
@@ -400,7 +400,7 @@ template <int dim>
 void ConservationLaw<dim>::apply_limiter_minmax_Qk ()
 {
    if(fe.degree == 0) return;
-   const unsigned int n_components = EulerEquations<dim>::n_components;
+   const unsigned int n_components = MHDEquations<dim>::n_components;
    
    // Quadrature rule for average gradient
    // No. of quadrature points = fe.degree/2 + 1
@@ -447,8 +447,8 @@ void ConservationLaw<dim>::apply_limiter_minmax_Qk ()
          EigMatrix R, L;
          if(parameters.char_lim)
          {
-            EulerEquations<dim>::compute_eigen_matrix (cell_average[c], R, L);
-            EulerEquations<dim>::transform_to_char (L, avg_cell);
+            MHDEquations<dim>::compute_eigen_matrix (cell_average[c], R, L);
+            MHDEquations<dim>::transform_to_char (L, avg_cell);
             avg_min = avg_cell;
             avg_max = avg_cell;
          }
@@ -462,7 +462,7 @@ void ConservationLaw<dim>::apply_limiter_minmax_Qk ()
                       ExcInternalError());
                get_cell_average (neighbor, avg_nbr);
                if(parameters.char_lim)
-                  EulerEquations<dim>::transform_to_char (L, avg_nbr);
+                  MHDEquations<dim>::transform_to_char (L, avg_nbr);
                for(unsigned int i=0; i<n_components; ++i)
                {
                   avg_min[i] = std::min( avg_min[i], avg_nbr(i));
@@ -492,8 +492,8 @@ void ConservationLaw<dim>::apply_limiter_minmax_Qk ()
          }
          if(parameters.char_lim)
          {
-            EulerEquations<dim>::transform_to_char (L, Dx);
-            EulerEquations<dim>::transform_to_char (L, Dy);
+            MHDEquations<dim>::transform_to_char (L, Dx);
+            MHDEquations<dim>::transform_to_char (L, Dy);
          }
          
          std::vector<double> theta(n_components, 1.0);
@@ -527,8 +527,8 @@ void ConservationLaw<dim>::apply_limiter_minmax_Qk ()
             }
             if(parameters.char_lim)
             {
-               EulerEquations<dim>::transform_to_con (R, Dx);
-               EulerEquations<dim>::transform_to_con (R, Dy);
+               MHDEquations<dim>::transform_to_con (R, Dx);
+               MHDEquations<dim>::transform_to_con (R, Dy);
             }
             cell->get_dof_indices(dof_indices);
             fe_values.reinit (cell);

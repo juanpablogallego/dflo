@@ -2076,7 +2076,7 @@ struct MHDEquations
    // http://people.nas.nasa.gov/~pulliam/Classes/New_notes/euler_notes.pdf
    // Note: This is implemented only for 2-D
    //---------------------------------------------------------------------------
-   /*static
+   static
    void compute_eigen_matrix (const dealii::Vector<double> &W,
                               double            (&Rx)[n_components][n_components],
                               double            (&Lx)[n_components][n_components],
@@ -2121,7 +2121,7 @@ struct MHDEquations
    //---------------------------------------------------------------------------
    // convert from conserved to characteristic variables: W = L*W
    //---------------------------------------------------------------------------
-   /*static
+   static
    void transform_to_char (const double           (&L)[n_components][n_components],
                            dealii::Vector<double> &W)
    {
@@ -2141,7 +2141,7 @@ struct MHDEquations
    //---------------------------------------------------------------------------
    // convert from characteristic to conserved variables: W = R*W
    //---------------------------------------------------------------------------
-   /*static
+   static
    void transform_to_con (const double           (&R)[n_components][n_components],
                           dealii::Vector<double> &W)
    {

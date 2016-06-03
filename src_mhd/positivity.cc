@@ -20,9 +20,10 @@ void ConservationLaw<dim>::apply_positivity_limiter_cell
    (typename DoFHandler<dim>::active_cell_iterator& cell,
     PosLimData<dim>& data)
 {   
-   static const double gas_gamma = EulerEquations<dim>::gas_gamma;
-   static const unsigned int density_component = EulerEquations<dim>::density_component;
-   static const unsigned int energy_component  = EulerEquations<dim>::energy_component;
+   static const double gas_gamma = MHDEquations<dim>::gas_gamma;
+   static const unsigned int magnetic_component = MHDEquations<dim>::magnetic_component;
+   static const unsigned int density_component = MHDEquations<dim>::density_component;
+   static const unsigned int energy_component  = MHDEquations<dim>::energy_component;
    
    // Find mininimum density and pressure in the whole grid
    static const double eps = 1.0e-13;
@@ -36,11 +37,13 @@ void ConservationLaw<dim>::apply_positivity_limiter_cell
    std::vector<double>& density_values = data.density_values;
    std::vector<double>& energy_values = data.energy_values;
    std::vector< Tensor<1,dim> >& momentum_values = data.momentum_values;
+   std::vector< Tensor<1,dim> >& magnetic_values = data.magnetic_values;
    std::vector<unsigned int>& local_dof_indices = data.local_dof_indices;
    std::pair<unsigned int,unsigned int>& local_range = data.local_range;
    
    static const FEValuesExtractors::Scalar density (density_component);
    static const FEValuesExtractors::Scalar energy  (energy_component);
+   static const FEValuesExtractors::Vector magnetic(magnetic_component);
    static const FEValuesExtractors::Vector momentum(0);
    
    unsigned int c = cell_number(cell);
