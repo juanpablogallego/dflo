@@ -2083,20 +2083,77 @@ struct MHDEquations
                               double            (&Ry)[n_components][n_components],
                               double            (&Ly)[n_components][n_components])
    {
-      double g1   = gas_gamma - 1.0;
-      double rho  = W[density_component];
-      double E    = W[energy_component];
-      double u    = W[0] / rho;
-      double v    = W[1] / rho;
-      double q2   = u*u + v*v;
-      double p    = g1 * (E - 0.5 * rho * q2);
+      double g1    = gas_gamma - 1.0;
+      double rho   = W[density_component];
+      double E     = W[energy_component];
+      double rho_1 = 1/rho;
+      double rho_2 = 1/sqrt(rho);
+      double u[v_components];
+      double b[v_components];
+      double u2 = 0, b2 = 0, udotb = 0;
+      for (unsigned int i=0; i<v_components; i++)
+      {
+	u[i]    = W[i] * rho_1;
+	b[i]    = W[magnetic_component+i] * rho_2;
+	u2     += u[i]*u[i];
+	b2     += b[i]*b[i];
+	udotb  += u[i]*W[magnetic_component+i];
+      }
+      
+      double p    = g1*(E - 0.5*rho*(u2 + b2));
       double c2   = gas_gamma * p / rho;
       double c    = std::sqrt(c2);
       double beta = 0.5/c2;
-      double phi2 = 0.5*g1*q2;
-      double h    = c2/g1 + 0.5*q2;
+      double phi2 = 0.5*g1*u2;
+      double h    = c2/g1 + 0.5*u2;
       
-      Rx[0][0] = 1;      Rx[0][1] = 0;  Rx[0][2] = 1;     Rx[0][3] = 1;
+      double g_1 = sqrt(g1/gas_gamma);
+      double g_2 = 1/sqrt(gas_gamma);
+      
+   // np x n
+   npn1 = np2*n3 - np3*n2;
+   npn2 = np3*n1 - np1*n3;
+   npn3 = np1*n2 - np2*n1;
+   
+   bnp = bb1*np1 + bb2*np2 + bb3*np3;
+   s1  = (alpf*a*a*n1 + alps*a*(bnp*n1 - bn*np1))/(srho*cf);
+   s2  = (alpf*a*a*n2 + alps*a*(bnp*n2 - bn*np2))/(srho*cf);
+   s3  = (alpf*a*a*n3 + alps*a*(bnp*n3 - bn*np3))/(srho*cf);
+      
+   // entropy wave    divergence wave alfven waves
+   Rx[1][1] = g_1/rho_2, Rx[1][2] = 0   , Rx[1][3] = 0             , Rx[1][4] =  Rx[1][3];
+   Rx[2][1] = 0	    , Rx[2][2] = 0   , Rx[2][3] = g3*a*npn1/srho, Rx[2][4] = -Rx[2][3];
+   Rx[3][1] = 0	    , Rx[3][2] = 0   , Rx[3][3] = g3*a*npn2/srho, Rx[3][4] = -Rx[3][3];
+   Rx[4][1] = 0	    , Rx[4][2] = 0   , Rx[4][3] = g3*a*npn3/srho, Rx[4][4] = -Rx[4][3];
+   Rx[5][1] = 0	    , Rx[5][2] = 0   , Rx[5][3] = 0             , Rx[5][4] =  Rx[5][3];
+   Rx[6][1] = 0	    , Rx[6][2] = g_2*a, Rx[6][3] = g3*a*npn1     , Rx[6][4] =  Rx[6][3];
+   Rx[7][1] = 0	    , Rx[7][2] = 0   , Rx[7][3] = g3*a*npn2     , Rx[7][4] =  Rx[7][3];
+   Rx[8][1] = 0	    , Rx[8][2] = 0   , Rx[8][3] = g3*a*npn3     , Rx[8][4] =  Rx[8][3];
+
+   
+   if(bn.gt.0)then
+      sbn = +1.0
+   else
+      sbn = -1.0
+   endif;
+   t1 = sbn*(alps*a*bn*n1 + alpf*cf*cf*np1)/(srho*cf);
+   t2 = sbn*(alps*a*bn*n2 + alpf*cf*cf*np2)/(srho*cf);
+   t3 = sbn*(alps*a*bn*n3 + alpf*cf*cf*np3)/(srho*cf);
+   
+   
+   // fast magneto acoustic wave                   slow magneto acoustic waves
+   Rx[1][5] =  g3*alpf*srho    , Rx[1][6] =  Rx[1][5], Rx[1][7] =  g3*alps*srho    , Rx[1][8] =  Rx[1][7];
+   Rx[2][5] = -g3*s1           , Rx[2][6] = -Rx[2][5], Rx[2][7] = -g3*t1           , Rx[2][8] = -Rx[2][7];
+   Rx[3][5] = -g3*s2           , Rx[3][6] = -Rx[3][5], Rx[3][7] = -g3*t2           , Rx[3][8] = -Rx[3][7];
+   Rx[4][5] = -g3*s3           , Rx[4][6] = -Rx[4][5], Rx[4][7] = -g3*t3           , Rx[4][8] = -Rx[4][7];
+   Rx[5][5] =  g3*alpf*srho*a*a, Rx[5][6] =  Rx[5][5], Rx[5][7] =  g3*alps*srho*a*a, Rx[5][8] =  Rx[5][7];
+   Rx[6][5] =  g3*alps*a*np1   , Rx[6][6] =  Rx[6][5], Rx[6][7] = -g3*alpf*a*np1   , Rx[6][8] =  Rx[6][7];
+   Rx[7][5] =  g3*alps*a*np2   , Rx[7][6] =  Rx[7][5], Rx[7][7] = -g3*alpf*a*np2   , Rx[7][8] =  Rx[7][7];
+   Rx[8][5] =  g3*alps*a*np3   , Rx[8][6] =  Rx[8][5], Rx[8][7] = -g3*alpf*a*np3   , Rx[8][8] =  Rx[8][7];
+   
+
+      
+/*      Rx[0][0] = 1;      Rx[0][1] = 0;  Rx[0][2] = 1;     Rx[0][3] = 1;
       Rx[1][0] = u;      Rx[1][1] = 0;  Rx[1][2] = u+c;   Rx[1][3] = u-c;
       Rx[2][0] = v;      Rx[2][1] = -1; Rx[2][2] = v;     Rx[2][3] = v;
       Rx[3][0] = 0.5*q2; Rx[3][1] = -v; Rx[3][2] = h+c*u; Rx[3][3] = h-c*u;
@@ -2115,8 +2172,48 @@ struct MHDEquations
       Ly[1][0] = -u;              Ly[1][1] = 1;             Ly[1][2] = 0;             Ly[1][3] = 0;
       Ly[2][0] = beta*(phi2-c*v); Ly[2][1] =-beta*g1*u;     Ly[2][2] = beta*(c-g1*v); Ly[2][3] = beta*g1;
       Ly[3][0] = beta*(phi2+c*v); Ly[3][1] =-beta*g1*u;     Ly[3][2] =-beta*(c+g1*v); Ly[3][3] = beta*g1;
+      //*/
+   }
+   
+   //---------------------------------------------------------------------------
+   // Left and right eigenvector matrices in the direction of (kx,ky)
+   // Following function uses the streamline direction.
+   // Expressions taken from
+   // http://people.nas.nasa.gov/~pulliam/Classes/New_notes/euler_notes.pdf
+   // Note: This is implemented only for 2-D
+   //---------------------------------------------------------------------------
+   static
+   void compute_eigen_matrix (const dealii::Vector<double> &W,
+                              double            (&R)[n_components][n_components],
+                              double            (&L)[n_components][n_components])
+   {
+      double g1   = gas_gamma - 1.0;
+      double rho  = W[density_component];
+      double E    = W[energy_component];
+      double u    = W[0] / rho;
+      double v    = W[1] / rho;
+      double q2   = u*u + v*v;
+      double p    = g1 * (E - 0.5 * rho * q2);
+      double c2   = gas_gamma * p / rho;
+      double c    = std::sqrt(c2);
+      double beta = 0.5/c2;
+      double phi2 = 0.5*g1*q2;
+      double h    = c2/g1 + 0.5*q2;
+      double theta= atan2(v,u);
+      double kx   = cos(theta);
+      double ky   = sin(theta);
+      double uk   = u*kx + v*ky;
       
-   }//*/
+      R[0][0] = 1;      R[0][1] = 0;         R[0][2] = 1;      R[0][3] = 1;
+      R[1][0] = u;      R[1][1] = ky;        R[1][2] = u+kx*c; R[1][3] = u-kx*c;
+      R[2][0] = v;      R[2][1] = -kx;       R[2][2] = v+ky*c; R[2][3] = v-ky*c;
+      R[3][0] = 0.5*q2; R[3][1] = ky*u-kx*v; R[3][2] = h+c*uk; R[3][3] = h-c*uk;
+      
+      L[0][0] = 1-phi2/c2;        L[0][1] = g1*u/c2;          L[0][2] = g1*v/c2;           L[0][3] = -g1/c2;
+      L[1][0] =-(ky*u-kx*v);      L[1][1] = ky;               L[1][2] = -kx;               L[1][3] = 0;
+      L[2][0] = beta*(phi2-c*uk); L[2][1] = beta*(kx*c-g1*u); L[2][2] =  beta*(ky*c-g1*v); L[2][3] = beta*g1;
+      L[3][0] = beta*(phi2+c*uk); L[3][1] =-beta*(kx*c+g1*u); L[3][2] = -beta*(ky*c+g1*v); L[3][3] = beta*g1;
+   }
    
    //---------------------------------------------------------------------------
    // convert from conserved to characteristic variables: W = L*W

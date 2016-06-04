@@ -64,7 +64,7 @@ struct PosLimData
    dealii::FEValues<dim> fe_values_y;
 
    std::vector<double> density_values, energy_values;
-   std::vector< Tensor<1,dim> > momentum_values;
+   std::vector< Tensor<1,dim> > momentum_values, magnetic_values;
 
    std::vector<unsigned int> local_dof_indices;
    std::pair<unsigned int, unsigned int> local_range;
@@ -83,6 +83,7 @@ PosLimData<dim>::PosLimData(const dealii::FESystem<dim>    &fe,
    fe_values_y (mapping, fe, quadrature_y, update_values),
    density_values (n_q_points),
    energy_values (n_q_points),
+   magnetic_values (n_q_points),
    momentum_values (n_q_points),
    local_dof_indices (fe.dofs_per_cell),
    local_range (local_range)
