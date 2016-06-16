@@ -161,8 +161,8 @@ namespace Parameters
       prm.enter_subsection("flux");
       {
          prm.declare_entry("flux", "lxf",
-                           Patterns::Selection("lxf|sw|kfvs|roe|hllc|kep"),
-                           "Numerical flux: lxf | sw | kfvs | roe | hllc | kep");
+                           Patterns::Selection("lxf|es_flux|sw|kfvs|roe|hllc|kep"),
+                           "Numerical flux: lxf | es_flux | sw | kfvs | roe | hllc | kep");
          prm.declare_entry("stab", "mesh",
                            Patterns::Selection("constant|mesh"),
                            "Whether to use a constant stabilization parameter or "
@@ -182,7 +182,9 @@ namespace Parameters
          const std::string flux = prm.get("flux");
          if(flux == "lxf")
             flux_type = lxf;
-         else if(flux == "sw")
+         else if(flux == "es_flux")
+            flux_type = es_flux;
+	 else if(flux == "sw")
             flux_type = sw;
          else if(flux == "kfvs")
             flux_type = kfvs;

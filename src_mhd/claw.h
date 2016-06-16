@@ -333,6 +333,13 @@ private:
                                            Aminus,
                                            normal_flux);
             break;
+	    
+	 case Parameters::Flux::es_flux:
+            MHDEquations<dim>::es_flux (normal,
+					Wplus,
+					Wminus,
+					normal_flux);
+            break;
 
          /*case Parameters::Flux::sw:
             EulerEquations<dim>::steger_warming_flux (normal,
