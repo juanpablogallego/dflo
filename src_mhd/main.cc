@@ -1,7 +1,15 @@
 #include "claw.h"
 #include <deal.II/base/timer.h>
 
+#include <fenv.h>
+#include <signal.h>
+
 using namespace dealii;
+
+void handler(int sig) {
+  std::printf("Floating Point Exception\n");
+  exit(0);
+}
 
 // @sect3{main()}
 // The following ``main'' function is
@@ -12,6 +20,10 @@ using namespace dealii;
 // line.
 int main (int argc, char *argv[])
 {
+  
+   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
+   signal(SIGFPE, handler);
+  
    deallog.depth_console(0);
    if (argc != 2 && argc != 3)
    {
