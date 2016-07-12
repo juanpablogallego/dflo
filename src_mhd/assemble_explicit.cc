@@ -77,6 +77,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
          /*for(unsigned int d=0; d<dim; ++d)
             grad_W[q][c][d] = 0.0;*/
       }
+      
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
          const unsigned int c = fe_v.get_fe().system_to_component_index(i).first;
@@ -137,7 +138,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
                 fe_v.JxW(point);
 	 
 	 // Powell terms WARNING: Check if it works
-	 F_i -= powellcoef[point][component_i] *
+	 F_i += powellcoef[point][component_i] *
                 fe_v.shape_value_component(i, point, component_i) *
                 fe_v.JxW(point) *
                 divB;//*/
