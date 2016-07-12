@@ -45,7 +45,9 @@ One or all of these are OFF in your installation but are required for this tutor
     )
 ENDIF()
 
-SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wno-tautological-compare" )
+SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wno-tautological-compare -g" )
+# Essential Flags
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static -static-libgcc -static-libstdc++")
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
 PROJECT(${TARGET})
