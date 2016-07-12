@@ -1997,6 +1997,9 @@ struct MHDEquations
 	    flux[magnetic_component+i][j] = (W[momentum_component+j] * W[magnetic_component+i]
 					    - W[momentum_component+i] * W[magnetic_component+j])
 					    / W[density_component];
+	    if(j==i)
+	      flux[magnetic_component+i][j] = 0;
+	    
 	    if(isnan(flux[magnetic_component+i][j]))
 	      std::cout<<"\n\t flux function is NaN, moment="<<W[momentum_component+i]
 		       <<", mag="<<W[magnetic_component+i]<<", density_1="<<W[density_component];//*/
@@ -2329,9 +2332,9 @@ struct MHDEquations
      
      // Compute entropy variables
      q[6] = -s/(gas_gamma-1.0) - beta*q2;
-     q[0] = 2.0*beta*cons[0];
-     q[1] = 2.0*beta*cons[1];
-     q[2] = 2.0*beta*cons[2];
+     q[0] = 2.0*beta*cons[0]/cons[6];
+     q[1] = 2.0*beta*cons[1]/cons[6];
+     q[2] = 2.0*beta*cons[2]/cons[6];
      q[3] = 2.0*beta*cons[3];
      q[4] = 2.0*beta*cons[4];
      q[5] = 2.0*beta*cons[5];
@@ -2374,7 +2377,7 @@ struct MHDEquations
      number unorm, Bnorm, bunorm;
      
      number g_1 = gas_gamma-1, g1 = sqrt(g_1/gas_gamma), g2 = 1/sqrt(gas_gamma),
-	    g3 = g2/sqrt(2), g4=1/g1;
+	    g3 = g2/sqrt(2), g4=1/g_1;
      
      rho = logavg (Wplus[6], Wminus[6]);
      u[0]   = 0.5 * (Wplus[0]/Wplus[6] + Wminus[0]/Wminus[6]);
@@ -2414,7 +2417,7 @@ struct MHDEquations
    normal_flux[6] = rho * unorm;
    normal_flux[0] = (p + 0.5*mB2)*normal[0] + u[0] * normal_flux[6] - Bnorm * B1;
    normal_flux[1] = (p + 0.5*mB2)*normal[1] + u[1] * normal_flux[6] - Bnorm * B2;
-   normal_flux[2] =                    u[2] * normal_flux[6] - Bnorm * B3;
+   normal_flux[2] =                           u[2] * normal_flux[6] - Bnorm * B3;
    normal_flux[3] = bunorm * B1 - bu1 * Bnorm;
    normal_flux[4] = bunorm * B2 - bu2 * Bnorm;
    normal_flux[5] = bunorm * B3 - bu3 * Bnorm;
@@ -2448,7 +2451,7 @@ struct MHDEquations
    
    // vector nperp
    ff = abs(mbb2 - bn*bn);
-   if(ff < 1.0e-10)
+   if(ff < 1.0e-12)
    {
       if(abs(normal[1]) < 1.0e-14)
       {
@@ -2524,9 +2527,9 @@ struct MHDEquations
    s2  = (alpf*a*a*n2 + alps*a*(bnp*n2 - bn*np2))/(srho*cf);
    s3  = (alpf*a*a*n3 + alps*a*(bnp*n3 - bn*np3))/(srho*cf);
    
-   Rp[0][4] = -g3*s1;
-   Rp[1][4] = -g3*s2;
-   Rp[2][4] = -g3*s3;
+   Rp[0][4] =  g3*s1;
+   Rp[1][4] =  g3*s2;
+   Rp[2][4] =  g3*s3;
    Rp[3][4] =  g3*alps*a*np1;
    Rp[4][4] =  g3*alps*a*np2;
    Rp[5][4] =  g3*alps*a*np3;
@@ -2555,9 +2558,9 @@ struct MHDEquations
    t2 = sbn*(alps*a*bn*n2 + alpf*cf*cf*np2)/(srho*cf);
    t3 = sbn*(alps*a*bn*n3 + alpf*cf*cf*np3)/(srho*cf);
    
-   Rp[0][6] = -g3*t1;
-   Rp[1][6] = -g3*t2;
-   Rp[2][6] = -g3*t3;
+   Rp[0][6] = g3*t1;
+   Rp[1][6] = g3*t2;
+   Rp[2][6] = g3*t3;
    Rp[3][6] = -g3*alpf*a*np1;
    Rp[4][6] = -g3*alpf*a*np2;
    Rp[5][6] = -g3*alpf*a*np3;
@@ -2617,13 +2620,13 @@ struct MHDEquations
    }
    
    Lambda[0] = abs(unorm);
-   Lambda[1] = abs(unorm-bn);
-   Lambda[2] = abs(unorm+bn);
-   Lambda[3] = abs(unorm+cf);
-   Lambda[4] = abs(unorm-cs);
+   Lambda[1] = abs(unorm);
+   Lambda[3] = abs(unorm+bn);
+   Lambda[2] = abs(unorm-bn);
+   Lambda[7] = abs(unorm+cf);
+   Lambda[6] = abs(unorm-cf);
    Lambda[5] = abs(unorm+cs);
-   Lambda[6] = abs(unorm);
-   Lambda[7] = abs(unorm-cf);
+   Lambda[4] = abs(unorm-cs);
 
    // Compute z
    computez(R, Wplus,  zl);
