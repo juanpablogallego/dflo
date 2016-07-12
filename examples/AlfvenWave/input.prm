@@ -4,7 +4,7 @@
 # The input grid 
 set mesh type = gmsh
 set mesh file = grid.msh
-set degree = 1
+set degree = 0
 set basis = Qk
 set mapping = cartesian
 
@@ -56,7 +56,7 @@ end
 subsection time stepping
   set time step type = global
   set cfl = 0.5
-  set final time = 2.0
+  set final time = 1.0
   set nonlinear iterations = 1
 end
 
@@ -69,7 +69,7 @@ end
 # --------------------------------------------------
 # Output frequency and kind
 subsection output
-  set iter step      = 20
+  set iter step      = 5
   set schlieren plot = true
   set format         = vtk #tecplot
 #  set compute angular momentum = 1
@@ -87,13 +87,13 @@ end
 # --------------------------------------------------
 # Flux parameters
 subsection flux
- set flux = lxf
+ set flux = es_flux #lxf #
 end
 
 subsection limiter
    set shock indicator = limiter
    set type = none
-   set characteristic limiter = true
+   set characteristic limiter = false
    set positivity limiter = false
    set M = 0
    set beta = 2

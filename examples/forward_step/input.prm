@@ -4,7 +4,7 @@
 # The input grid 
 set mesh type = gmsh
 set mesh file = step.msh
-set degree = 1
+set degree = 0
 set mapping = cartesian
 
 # Stabilization parameter
@@ -20,8 +20,12 @@ subsection boundary_1
    set type = inflow
    set w_0 value =        4.20000
    set w_1 value =        0.00000
-   set w_2 value =        1.40000
-   set w_3 value =        8.80000
+   set w_2 value =        0.00000
+   set w_3 value =        0.00000
+   set w_4 value =        0.00000
+   set w_5 value =        0.00000
+   set w_6 value =        1.40000
+   set w_7 value =        8.80000
 end
 
 subsection boundary_2
@@ -42,8 +46,12 @@ end
 subsection initial condition
    set w_0 value =        4.20000
    set w_1 value =        0.00000
-   set w_2 value =        1.40000
-   set w_3 value =        8.80000
+   set w_2 value =        0.00000
+   set w_3 value =        0.00000
+   set w_4 value =        0.00000
+   set w_5 value =        0.00000
+   set w_6 value =        1.40000
+   set w_7 value =        8.80000
 end
 
 # --------------------------------------------------
@@ -63,9 +71,9 @@ end
 # --------------------------------------------------
 # Output frequency and kind
 subsection output
-  set iter step      = 100
+  set iter step      = 50
   set schlieren plot = true
-  set format         = tecplot
+  set format         = vtk
 end
 
 # --------------------------------------------------

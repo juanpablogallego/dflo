@@ -4,7 +4,7 @@
 # The input grid 
 set mesh type = gmsh
 set mesh file = grid.msh
-set degree = 1
+set degree = 0
 set basis = Pk
 set mapping = cartesian
 
