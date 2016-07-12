@@ -336,8 +336,8 @@ private:
 	    
 	 case Parameters::Flux::es_flux:
             MHDEquations<dim>::es_flux (normal,
-					Wplus,
 					Wminus,
+					Wplus,
 					normal_flux);
             break;
 
