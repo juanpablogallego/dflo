@@ -209,6 +209,22 @@ void ConservationLaw<dim>::configure_periodic_boundary()
 }
 /******************************************************************************************/
 
+//------------------------------------------------------------------------------
+// Internal grid generation
+//------------------------------------------------------------------------------
+template <int dim>
+void ConservationLaw<dim>::internal_grid()
+{
+   if(parameters.mesh_type == "alfvenwave")
+   {
+     alfven_wave_grid();
+   }
+   else
+   {
+      AssertThrow (false, ExcMessage("Requested grid unknown"));
+   }
+
+}
 
 //------------------------------------------------------------------------------
 // Return mapping type based on selected type
@@ -825,16 +841,23 @@ void ConservationLaw<dim>::run ()
    timer_all.start();
    
    {
-      GridIn<dim> grid_in;
-      grid_in.attach_triangulation(triangulation);
-      
-      std::ifstream input_file(parameters.mesh_filename.c_str());
-      Assert (input_file, ExcFileNotOpen(parameters.mesh_filename.c_str()));
-      
-      if(parameters.mesh_type == "ucd")
-         grid_in.read_ucd(input_file);
-      else if(parameters.mesh_type == "gmsh")
-         grid_in.read_msh(input_file);
+     if(parameters.mesh_filename=="internal")
+     {
+       internal_grid();
+     }
+     else
+     {
+       GridIn<dim> grid_in;
+       grid_in.attach_triangulation(triangulation);
+       
+       std::ifstream input_file(parameters.mesh_filename.c_str());
+       Assert (input_file, ExcFileNotOpen(parameters.mesh_filename.c_str()));
+       
+       if(parameters.mesh_type == "ucd")
+	 grid_in.read_ucd(input_file);
+       else if(parameters.mesh_type == "gmsh")
+	 grid_in.read_msh(input_file);
+     }
    }
    
    // Set periodic boundary conditions

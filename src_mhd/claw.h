@@ -129,6 +129,9 @@ private:
    
    void configure_periodic_boundary();
    
+   void internal_grid();
+   void alfven_wave_grid(); //parallel::distributed::Triangulation<dim> &triangulation);
+   
    const Mapping<dim,dim>& mapping() const;
    void compute_cartesian_mesh_size ();
    void compute_inv_mass_matrix();

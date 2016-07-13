@@ -337,10 +337,10 @@ namespace Parameters
    AllParameters<dim>::declare_parameters (ParameterHandler &prm)
    {
       prm.declare_entry("mesh type", "gmsh",
-                        Patterns::Selection("ucd|gmsh"),
+                        Patterns::Selection("ucd|gmsh|alfvenwave"),
                         "Mesh file type");
       
-      prm.declare_entry("mesh file", "grid.msh",
+      prm.declare_entry("mesh file", "internal",
                         Patterns::Anything(),
                         "Mesh file name");
       
