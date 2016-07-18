@@ -12,8 +12,10 @@
 using namespace dealii;
 
 template <int dim>
-void ConservationLaw<dim>::alfven_wave_grid () //parallel::distributed::Triangulation<dim> &triangulation)
+void ConservationLaw<dim>::alfven_wave_grid ()
 {
+  pcout<<"\n\t Creating grid for the Alfven wave test case\n";
+  
   double ly = std::sqrt(5), lx = 0.5*ly;
 
   Triangulation<dim> tria;
@@ -21,7 +23,7 @@ void ConservationLaw<dim>::alfven_wave_grid () //parallel::distributed::Triangul
   const Point<dim> p1 (0,0);
   const Point<dim> p2 (lx, ly);
   std::vector<unsigned int> vect (dim);
-  vect[0]=128;
+  vect[0]=3;
   vect[1]=2*vect[0];
   
   const std::vector<unsigned int> repetition = vect;
@@ -31,7 +33,31 @@ void ConservationLaw<dim>::alfven_wave_grid () //parallel::distributed::Triangul
 					     p1,
 					     p2,
 					     true);
-  //tria.refine_global (4);
+//*--------------------check---------------*/
+  Triangulation<2>::active_cell_iterator
+  cell = triangulation.begin_active(),
+  endc = triangulation.end();
+  for (; cell!=endc; ++cell)
+  {
+    if(cell->at_boundary())
+    {
+      for(unsigned int i=0; i<)
+    }
+  }
+//*--------------------check---------------*/
+  
+  std::ofstream out ("grid.msh");
+  GridOut grid_out;
+  GridOutFlags::Msh flags(true,true);
+  grid_out.set_flags(flags);
+  grid_out.write_msh (tria, out);
+  pcout << "Grid written to grid.msh" << std::endl;
+  
+  std::ofstream out1 ("grid.eps");
+  GridOut grid_out1;
+  grid_out1.write_eps (tria, out1);
+  pcout << "Grid written to grid.eps" << std::endl;
+  
   
   triangulation.copy_triangulation(tria);
   
