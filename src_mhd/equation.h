@@ -2298,7 +2298,8 @@ struct MHDEquations
    }
    
    template <typename Number>
-   static Number logavg(Number  left, Number right)
+   static Number logavg(Number left,
+			Number right)
    {
      Number roeaverage=0;
      Number F = 0;
@@ -2575,9 +2576,9 @@ struct MHDEquations
    {
       sbn = -1.0;
    }
-   t1 = sbn*(alps*a*bn*n1 + alpf*cf*cf*np1)/(srho*cf);
-   t2 = sbn*(alps*a*bn*n2 + alpf*cf*cf*np2)/(srho*cf);
-   t3 = sbn*(alps*a*bn*n3 + alpf*cf*cf*np3)/(srho*cf);
+   t1 = sbn*(alps*a*bn*n1 + alpf*cf2*np1)/(srho*cf);
+   t2 = sbn*(alps*a*bn*n2 + alpf*cf2*np2)/(srho*cf);
+   t3 = sbn*(alps*a*bn*n3 + alpf*cf2*np3)/(srho*cf);
    
    Rp[0][6] =  g3*alps*srho;
    Rp[1][6] = -g3*t1;
