@@ -66,7 +66,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
    ForcingVector *forcing = new ForcingVector[n_q_points];
    
    // Divergence of the magnetic field (should be a scalar)
-   double divB = 0;
+   double divB[n_q_points];
    
    for (unsigned int q=0; q<n_q_points; ++q)
    {
@@ -77,6 +77,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
          /*for(unsigned int d=0; d<dim; ++d)
             grad_W[q][c][d] = 0.0;*/
       }
+      divB[q]=0;
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
          const unsigned int c = fe_v.get_fe().system_to_component_index(i).first;
@@ -89,7 +90,7 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
 	    (c<MHDEquations<dim>::magnetic_component + dim))
 	 {
 	   unsigned int d = c-MHDEquations<dim>::magnetic_component;
-	   divB += current_solution(dof_indices[i]) *
+	   divB[q] += current_solution(dof_indices[i]) *
 		   fe_v.shape_grad_component(i, q, c)[d];
 	 }
          
@@ -137,10 +138,10 @@ void ConservationLaw<dim>::integrate_cell_term_explicit
                 fe_v.JxW(point);
 	 
 	 // Powell terms WARNING: Check if it works
-	 F_i -= powellcoef[point][component_i] *
+	 F_i += powellcoef[point][component_i] *
                 fe_v.shape_value_component(i, point, component_i) *
                 fe_v.JxW(point) *
-                divB;//*/
+                divB[point];//*/
       }
       
       local_vector (i) -= F_i;
@@ -471,10 +472,14 @@ void ConservationLaw<dim>::integrate_face_term_explicit
    // Compute numerical flux at all quadrature points
    typedef double NormalFlux[MHDEquations<dim>::n_components];
    NormalFlux *normal_fluxes = new NormalFlux[n_q_points];
+   NormalFlux *normal_fluxes_n = new NormalFlux[n_q_points];
+
    
    // Powell Coeficients of the divergence divB
    typedef double PowellCoef[MHDEquations<dim>::n_components];
-   PowellCoef *powellcoef = new PowellCoef[n_q_points];//*/
+   PowellCoef *powellcoef = new PowellCoef[n_q_points];
+   PowellCoef *powellcoef_n = new PowellCoef[n_q_points];
+   double deltaB = 0;//*/
    
    // Wminus is Neighbouring cell value
    for (unsigned int q=0; q<n_q_points; ++q)
@@ -490,6 +495,7 @@ void ConservationLaw<dim>::integrate_face_term_explicit
           grad_Wminus[q][c][d] = 0.0;*/
 	 
 	 powellcoef[q][c] = 0.0;
+	 powellcoef_n[q][c] = 0.0;
       }
       for (unsigned int i=0; i<dofs_per_cell; ++i)
       {
@@ -517,6 +523,8 @@ void ConservationLaw<dim>::integrate_face_term_explicit
                             cell_average[cell_no],
                             cell_average[neighbor_cell_no],
                             normal_fluxes[q]);
+      for(unsigned int c=0; c<MHDEquations<dim>::n_components; c++)
+	normal_fluxes_n[q][c]=normal_fluxes[q][c];//*/
       
       // Powell terms of the divergence divB at the boundaries
       if(parameters.add_powell_terms)
@@ -525,10 +533,14 @@ void ConservationLaw<dim>::integrate_face_term_explicit
 	double deltaB = 0;
 	
 	MHDEquations<dim>::powell_terms(Wplus[q], powellcoef[q]);
+	MHDEquations<dim>::powell_terms(Wminus[q], powellcoef_n[q]);
 	for(unsigned int d=0; d<dim; d++)
 	  deltaB+=(Wminus[q][mk+d]-Wplus[q][mk+d])*fe_v.normal_vector(q)[d];
 	for(unsigned int c=0; c<MHDEquations<dim>::n_components; c++)
-	  normal_fluxes[q][c]+=0.5*deltaB*powellcoef[q][c];
+	{
+	  normal_fluxes[q][c]+=0.5*deltaB*powellcoef[q][c];//*/
+	  normal_fluxes_n[q][c]-=0.5*deltaB*powellcoef_n[q][c];//*/
+	}
       }//*/
    }
    
@@ -584,7 +596,7 @@ void ConservationLaw<dim>::integrate_face_term_explicit
             const unsigned int
             component_i = fe_v_neighbor.get_fe().system_to_component_index(i).first;
             
-            F_i -= normal_fluxes[point][component_i] *
+            F_i -= normal_fluxes_n[point][component_i] *
                    fe_v_neighbor.shape_value_component(i, point, component_i) *
                    fe_v_neighbor.JxW(point);
 
@@ -616,6 +628,8 @@ void ConservationLaw<dim>::integrate_face_term_explicit
    
    delete[] normal_fluxes;
    delete[] powellcoef;
+   delete[] normal_fluxes_n;
+   delete[] powellcoef_n;
 
 }
 

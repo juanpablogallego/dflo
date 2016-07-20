@@ -1997,6 +1997,9 @@ struct MHDEquations
 	    flux[magnetic_component+i][j] = (W[momentum_component+j] * W[magnetic_component+i]
 					    - W[momentum_component+i] * W[magnetic_component+j])
 					    / W[density_component];
+	    if(j==i)
+	      flux[magnetic_component+i][j] = 0;
+	    
 	    if(isnan(flux[magnetic_component+i][j]))
 	      std::cout<<"\n\t flux function is NaN, moment="<<W[momentum_component+i]
 		       <<", mag="<<W[magnetic_component+i]<<", density_1="<<W[density_component];//*/
@@ -2390,6 +2393,388 @@ struct MHDEquations
       for (unsigned int c=0; c<n_components; ++c)
          normal_flux[c] += 0.5 * lambda * (Wplus[c] - Wminus[c]);//*/
    }
+   
+   template <typename Number>
+   static Number logavg(Number left,
+			Number right)
+   {
+     Number roeaverage=0;
+     Number F = 0;
+     Number psi = left/right;
+     Number f   = (psi-1)/(psi+1);
+     Number u   = f * f;
+     
+     if(u<1e-2)
+       F = 1 + u/3 + u*u/5 + u*u*u/7;
+     else
+       F = 0.5*log(psi)/f;
+     
+     roeaverage = (left+right)/(2*F);
+     
+     return roeaverage;
+   }
+   
+   
+   /*template <typename InputVector>
+   static void computez(typename InputVector::value_type (&R)[n_components][n_components],
+			//const    InputVector              &prim,
+			typename InputVector::value_type (&prim)[n_components],
+			typename InputVector::value_type (&z)[n_components])//*/
+   template <typename number>
+   static void computez(number (&R)[n_components][n_components],
+			number (&prim)[n_components],
+			number (&z)[n_components])
+   {
+     //typedef typename InputVector::value_type number;
+     //number p    = compute_pressure<number>(prim),
+     number s    = log(prim[4]) - gas_gamma * log(prim[0]),
+	    beta = 0.5*prim[0]/prim[4],
+	    q2   = (prim[1]*prim[1] + prim[2]*prim[2] + prim[3]*prim[3]),
+	    q[n_components];
+     
+     // Compute entropy variables
+     q[0] = -s/(gas_gamma-1.0) - beta*q2;
+     q[1] = 2.0*beta*prim[1];
+     q[2] = 2.0*beta*prim[2];
+     q[3] = 2.0*beta*prim[3];
+     q[4] = -2.0*beta;
+     q[5] = 2.0*beta*prim[5];
+     q[6] = 2.0*beta*prim[6];
+     q[7] = 2.0*beta*prim[7];
+     
+     // Compute R^T * q
+     for(unsigned int i=0; i<n_components;i++)
+     {
+       z[i] = 0.0;
+       for(unsigned int j=0; j<n_components;j++)
+	 z[i] += R[j][i] * q[j];
+     }
+   
+   }
+   
+   
+   // --------------------------------------------------------------------------
+   // Entropy stable numerical flux by Chandrashekar and Klingenberg
+   // --------------------------------------------------------------------------
+   template <typename InputVector>
+   static
+   void es_flux 
+   (
+    const dealii::Tensor<1,dim> &normal,
+    const InputVector                &Wplus,
+    const InputVector                &Wminus,
+    typename InputVector::value_type (&normal_flux)[n_components]
+   )
+   {
+     typedef typename InputVector::value_type number;
+     
+     number left[n_components], right[n_components], flux[n_components];
+     number rho, u[v_components], ul2, ur2, q2, B1, B2, B3, Bl2, Br2, mB2;
+     number betal, betar, beta, rho_a, beta_a, p, bu1, bu2, bu3;
+     number a, srho, bb1, bb2, bb3, mbb2, cf2, cs2, cf, cs, alpf, alps;
+     number n1, n2, n3, np1, np2, np3, bet, alp, npn1, npn2, npn3, ff;
+     number bn, bnp, s1, s2, s3, sbn, t1, t2, t3;
+     number Kin, Jac[n_components][n_components], Rp[n_components][n_components],
+	    R[n_components][n_components], Lambda[n_components];
+     number Diff, zl[n_components], zr[n_components], dz[n_components];
+     number unorm, Bnorm, bunorm;
+     
+     number g_1 = gas_gamma-1, g1 = sqrt(g_1/gas_gamma), g2 = 1/sqrt(gas_gamma),
+	    g3 = g2/sqrt(2), g4=1/g_1;
+	    
+     left[0]=Wplus[6];
+     left[1]=Wplus[0]/Wplus[6];
+     left[2]=Wplus[1]/Wplus[6];
+     left[3]=Wplus[2]/Wplus[6];
+     left[4]=compute_pressure<number>(Wplus);
+     left[5]=Wplus[3];
+     left[6]=Wplus[4];
+     left[7]=Wplus[5];
+     
+     right[0]=Wminus[6];
+     right[1]=Wminus[0]/Wminus[6];
+     right[2]=Wminus[1]/Wminus[6];
+     right[3]=Wminus[2]/Wminus[6];
+     right[4]=compute_pressure<number>(Wminus);
+     right[5]=Wminus[3];
+     right[6]=Wminus[4];
+     right[7]=Wminus[5];
+     
+     rho = logavg (left[0], right[0]);
+     u[0]   = 0.5 * (left[1] + right[1]);
+     u[1]   = 0.5 * (left[2] + right[2]);
+     u[2]   = 0.5 * (left[3] + right[3]);
+     
+     unorm= u[0]*normal[0] + u[1]*normal[1];
+     
+     ul2 = left[1]*left[1] + left[2]*left[2] + left[3]*left[3];
+     ur2 = right[1]*right[1] + right[2]*right[2] + right[3]*right[3];
+     q2  = 0.5 * (ul2 + ur2);
+
+   B1   = 0.5 * (left[5] + right[5]);
+   B2   = 0.5 * (left[6] + right[6]);
+   B3   = 0.5 * (left[7] + right[7]);
+   Bnorm= B1*normal[0] + B2*normal[1];
+
+   Bl2 = left[5]*left[5] + left[6]*left[6] + left[7]*left[7];
+   Br2 = right[5]*right[5] + right[6]*right[6] + right[7]*right[7];
+   mB2  = 0.5*(Bl2 + Br2);
+   
+   betal = left[0]/(2.0*left[4]);
+   betar = right[0]/(2.0*right[4]);
+   beta  = logavg(betal, betar);
+   
+   rho_a = 0.5*(left[0]+right[0]);
+   beta_a = 0.5*(betal+betar);
+   p   = 0.5 * rho_a / beta_a;
+
+   bu1   = (betal*left[1] + betar*right[1])/(betal+betar);
+   bu2   = (betal*left[2] + betar*right[2])/(betal+betar);
+   bu3   = (betal*left[3] + betar*right[3])/(betal+betar);
+   bunorm= bu1*normal[0] + bu2*normal[1];
+   
+   flux[0] = rho * unorm;
+   flux[1] = (p + 0.5*mB2)*normal[0] + u[0] * flux[0] - Bnorm * B1;
+   flux[2] = (p + 0.5*mB2)*normal[1] + u[1] * flux[0] - Bnorm * B2;
+   flux[3] =                           u[2] * flux[0] - Bnorm * B3;
+   flux[5] = bunorm * B1 - bu1 * Bnorm;
+   flux[6] = bunorm * B2 - bu2 * Bnorm;
+   flux[7] = bunorm * B3 - bu3 * Bnorm;
+   flux[4] = 0.5*( 1/(g_1*beta) - q2) * flux[0]
+             + u[0] * flux[1] + u[1] * flux[2] + u[2] * flux[3]
+             + B1 * flux[5] + B2*flux[6] + B3 * flux[7]
+             - 0.5*unorm*mB2 + (u[0]*B1+u[1]*B2+u[2]*B3)*Bnorm;
+ 
+   // Add entropy dissipation
+   // normal vector
+   n1 = normal[0];
+   n2 = normal[1];
+   n3 = 0.0;
+
+   // Add entropy dissipation
+   a = sqrt(0.5 * gas_gamma / beta);
+   
+   srho = sqrt(rho);
+   bb1 = B1/srho;
+   bb2 = B2/srho;
+   bb3 = B3/srho;
+   mbb2 = bb1*bb1 + bb2*bb2 + bb3*bb3;
+   bn  = bb1*n1  + bb2*n2  + bb3*n3;
+   cf2 = 0.5*(a*a + mbb2) + 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
+   cs2 = 0.5*(a*a + mbb2) - 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
+   cf = sqrt(cf2);
+   cs = sqrt(abs(cs2)); // cs may be zero or close to zero
+   
+   alpf = sqrt( abs((a*a - cs2)/(cf2 - cs2)) );
+   alps = sqrt( abs((cf2 - a*a)/(cf2 - cs2)) );
+   
+   // vector nperp
+   ff = abs(mbb2 - bn*bn);
+   if(ff < 1.0e-10)
+   {
+      if(abs(normal[1]) < 1.0e-14)
+      {
+         np1 = 0.0;
+         np2 = 1.0/sqrt(2.0);
+         np3 = 1.0/sqrt(2.0);
+      }
+      else
+      {
+         np1 = 1.0/sqrt(2.0);
+         np2 = 0.0;
+         np3 = 1.0/sqrt(2.0);
+      }
+  }
+   else
+   {
+      bet = 1.0/sqrt(ff);
+      alp = - bet * bn;
+      np1 = alp*n1 + bet*bb1;
+      np2 = alp*n2 + bet*bb2;
+      np3 = alp*n3 + bet*bb3;
+   }
+   
+   // Primitive eigenvectors
+   
+   // entropy wave
+   Rp[0][0] = g1*srho;
+   Rp[1][0] = 0;
+   Rp[2][0] = 0;
+   Rp[3][0] = 0;
+   Rp[4][0] = 0;
+   Rp[5][0] = 0;
+   Rp[6][0] = 0;
+   Rp[7][0] = 0;
+   
+   // divergence wave
+   Rp[0][1] = 0;
+   Rp[1][1] = 0;
+   Rp[2][1] = 0;
+   Rp[3][1] = 0;
+   Rp[4][1] = 0;
+   Rp[5][1] = g2*a*n1;
+   Rp[6][1] = g2*a*n2;
+   Rp[7][1] = g2*a*n3;
+   
+   // alfven waves
+   // np x n
+   npn1 = np2*n3 - np3*n2;
+   npn2 = np3*n1 - np1*n3;
+   npn3 = np1*n2 - np2*n1;
+
+   Rp[0][2] = 0;
+   Rp[1][2] = g3*a*npn1/srho;
+   Rp[2][2] = g3*a*npn2/srho;
+   Rp[3][2] = g3*a*npn3/srho;
+   Rp[4][2] = 0;
+   Rp[5][2] = g3*a*npn1;
+   Rp[6][2] = g3*a*npn2;
+   Rp[7][2] = g3*a*npn3;
+
+   Rp[0][3] =  Rp[0][2];
+   Rp[1][3] = -Rp[1][2];
+   Rp[2][3] = -Rp[2][2];
+   Rp[3][3] = -Rp[3][2];
+   Rp[4][3] =  Rp[4][2];
+   Rp[5][3] =  Rp[5][2];
+   Rp[6][3] =  Rp[6][2];
+   Rp[7][3] =  Rp[7][2];
+
+   // fast magneto acoustic wave
+   bnp = bb1*np1 + bb2*np2 + bb3*np3;
+   s1  = (alpf*a*a*n1 + alps*a*(bnp*n1 - bn*np1))/(srho*cf);
+   s2  = (alpf*a*a*n2 + alps*a*(bnp*n2 - bn*np2))/(srho*cf);
+   s3  = (alpf*a*a*n3 + alps*a*(bnp*n3 - bn*np3))/(srho*cf);
+   
+   Rp[0][4] =  g3*alpf*srho;
+   Rp[1][4] = -g3*s1;
+   Rp[2][4] = -g3*s2;
+   Rp[3][4] = -g3*s3;
+   Rp[4][4] =  g3*alpf*srho*a*a;
+   Rp[5][4] =  g3*alps*a*np1;
+   Rp[6][4] =  g3*alps*a*np2;
+   Rp[7][4] =  g3*alps*a*np3;
+   
+   Rp[0][5] =  Rp[0][4];
+   Rp[1][5] = -Rp[1][4];
+   Rp[2][5] = -Rp[2][4];
+   Rp[3][5] = -Rp[3][4];
+   Rp[4][5] =  Rp[4][4];
+   Rp[5][5] =  Rp[5][4];
+   Rp[6][5] =  Rp[6][4];
+   Rp[7][5] =  Rp[7][4];
+   
+   // slow magneto acoustic waves
+   if(bn > 0)
+   {
+      sbn = +1.0;
+   }
+   else
+   {
+      sbn = -1.0;
+   }
+   t1 = sbn*(alps*a*bn*n1 + alpf*cf2*np1)/(srho*cf);
+   t2 = sbn*(alps*a*bn*n2 + alpf*cf2*np2)/(srho*cf);
+   t3 = sbn*(alps*a*bn*n3 + alpf*cf2*np3)/(srho*cf);
+   
+   Rp[0][6] =  g3*alps*srho;
+   Rp[1][6] = -g3*t1;
+   Rp[2][6] = -g3*t2;
+   Rp[3][6] = -g3*t3;
+   Rp[4][6] =  g3*alps*srho*a*a;
+   Rp[5][6] = -g3*alpf*a*np1;
+   Rp[6][6] = -g3*alpf*a*np2;
+   Rp[7][6] = -g3*alpf*a*np3;
+
+   Rp[0][7] =  Rp[0][6];
+   Rp[1][7] = -Rp[1][6];
+   Rp[2][7] = -Rp[2][6];
+   Rp[3][7] = -Rp[3][6];
+   Rp[4][7] =  Rp[4][6];
+   Rp[5][7] =  Rp[5][6];
+   Rp[6][7] =  Rp[6][6];
+   Rp[7][7] =  Rp[7][6];
+   
+   // Jacobian = d(con)/d(prim)
+   Kin = 0.5*(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
+
+   for(unsigned int i = 0; i < n_components; i++)
+   	for(unsigned int j = 0; j < n_components; j++)
+	   Jac[i][j]    = 0.0;
+
+   Jac[0][0] = 1.0;
+   Jac[1][0] = u[0];
+   Jac[2][0] = u[1];
+   Jac[3][0] = u[2];
+   Jac[4][0] = Kin;
+
+   Jac[1][1] = rho;
+   Jac[4][1] = rho*u[0];
+
+   Jac[2][2] = rho;
+   Jac[4][2] = rho*u[1];
+
+   Jac[3][3] = rho;
+   Jac[4][3] = rho*u[2];
+
+   Jac[4][4] = g4;
+
+   Jac[4][5] = B1;
+   Jac[4][6] = B2;
+   Jac[4][7] = B3;
+
+   Jac[5][5] = 1.0;
+   Jac[6][6] = 1.0;
+   Jac[7][7] = 1.0;
+
+   // Conserved eigenvectors: R = Jac * Rp
+   for(unsigned int i=0; i<n_components; i++)
+   {
+      for(unsigned int j=0; j<n_components; j++)
+      {
+         R[i][j] = 0.0;
+         for(unsigned int k=0; k<n_components; k++)
+            R[i][j] += Jac[i][k]*Rp[k][j];
+      }
+   }
+   
+   Lambda[0] = abs(unorm);
+   Lambda[1] = abs(unorm);
+   Lambda[2] = abs(unorm-bn);
+   Lambda[3] = abs(unorm+bn);
+   Lambda[4] = abs(unorm-cf);
+   Lambda[5] = abs(unorm+cf);
+   Lambda[6] = abs(unorm-cs);
+   Lambda[7] = abs(unorm+cs);
+
+   // Compute z
+   computez(R, left,  zl);
+   computez(R, right, zr);
+
+   for(unsigned int i=0; i<n_components; i++)
+      dz[i] = Lambda[i] * (zr[i] - zl[i]);
+   
+   for(unsigned int i=0; i<n_components; i++)
+   {
+      Diff = 0.0;
+      for(unsigned int j=0; j<n_components; j++)
+         Diff += R[i][j] * dz[j];
+      
+      flux[i] -= 0.5*Diff;
+   }
+   
+   normal_flux[0] = flux[1];
+   normal_flux[1] = flux[2];
+   normal_flux[2] = flux[3];
+   normal_flux[3] = flux[5];
+   normal_flux[4] = flux[6];
+   normal_flux[5] = flux[7];
+   normal_flux[6] = flux[0];
+   normal_flux[7] = flux[4];
+   
+   }
+   
+   
    
    // --------------------------------------------------------------------------
    // Steger-Warming flux
