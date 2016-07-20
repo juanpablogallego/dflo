@@ -2301,7 +2301,6 @@ struct MHDEquations
    static Number logavg(Number left,
 			Number right)
    {
-     //Number roeaverage = (right - left) / (log(right) - log(left));
      Number roeaverage=0;
      Number F = 0;
      Number psi = left/right;
@@ -2319,27 +2318,32 @@ struct MHDEquations
    }
    
    
-   template <typename InputVector>
+   /*template <typename InputVector>
    static void computez(typename InputVector::value_type (&R)[n_components][n_components],
-			const    InputVector              &cons,
-			typename InputVector::value_type (&z)[n_components])
+			//const    InputVector              &prim,
+			typename InputVector::value_type (&prim)[n_components],
+			typename InputVector::value_type (&z)[n_components])//*/
+   template <typename number>
+   static void computez(number (&R)[n_components][n_components],
+			number (&prim)[n_components],
+			number (&z)[n_components])
    {
-     typedef typename InputVector::value_type number;
-     number p    = compute_pressure<number>(cons),
-            s    = log(p) - gas_gamma * log(cons[6]),
-	    beta = 0.5*cons[6]/p,
-	    q2   = (cons[0]*cons[0] + cons[1]*cons[1] + cons[2]*cons[2])/(cons[6]*cons[6]),
+     //typedef typename InputVector::value_type number;
+     //number p    = compute_pressure<number>(prim),
+     number s    = log(prim[4]) - gas_gamma * log(prim[0]),
+	    beta = 0.5*prim[0]/prim[4],
+	    q2   = (prim[1]*prim[1] + prim[2]*prim[2] + prim[3]*prim[3]),
 	    q[n_components];
      
      // Compute entropy variables
-     q[6] = (gas_gamma-s)/(gas_gamma-1.0) - beta*q2;
-     q[0] = 2.0*beta*cons[0]/cons[6];
-     q[1] = 2.0*beta*cons[1]/cons[6];
-     q[2] = 2.0*beta*cons[2]/cons[6];
-     q[3] = 2.0*beta*cons[3];
-     q[4] = 2.0*beta*cons[4];
-     q[5] = 2.0*beta*cons[5];
-     q[7] = -2.0*beta;
+     q[0] = -s/(gas_gamma-1.0) - beta*q2;
+     q[1] = 2.0*beta*prim[1];
+     q[2] = 2.0*beta*prim[2];
+     q[3] = 2.0*beta*prim[3];
+     q[4] = -2.0*beta;
+     q[5] = 2.0*beta*prim[5];
+     q[6] = 2.0*beta*prim[6];
+     q[7] = 2.0*beta*prim[7];
      
      // Compute R^T * q
      for(unsigned int i=0; i<n_components;i++)
@@ -2367,6 +2371,7 @@ struct MHDEquations
    {
      typedef typename InputVector::value_type number;
      
+     number left[n_components], right[n_components], flux[n_components];
      number rho, u[v_components], ul2, ur2, q2, B1, B2, B3, Bl2, Br2, mB2;
      number betal, betar, beta, rho_a, beta_a, p, bu1, bu2, bu3;
      number a, srho, bb1, bb2, bb3, mbb2, cf2, cs2, cf, cs, alpf, alps;
@@ -2379,53 +2384,69 @@ struct MHDEquations
      
      number g_1 = gas_gamma-1, g1 = sqrt(g_1/gas_gamma), g2 = 1/sqrt(gas_gamma),
 	    g3 = g2/sqrt(2), g4=1/g_1;
+	    
+     left[0]=Wplus[6];
+     left[1]=Wplus[0]/Wplus[6];
+     left[2]=Wplus[1]/Wplus[6];
+     left[3]=Wplus[2]/Wplus[6];
+     left[4]=compute_pressure<number>(Wplus);
+     left[5]=Wplus[3];
+     left[6]=Wplus[4];
+     left[7]=Wplus[5];
      
-     rho = logavg (Wplus[6], Wminus[6]);
-     u[0]   = 0.5 * (Wplus[0]/Wplus[6] + Wminus[0]/Wminus[6]);
-     u[1]   = 0.5 * (Wplus[1]/Wplus[6] + Wminus[1]/Wminus[6]);
-     u[2]   = 0.5 * (Wplus[2]/Wplus[6] + Wminus[2]/Wminus[6]);
+     right[0]=Wminus[6];
+     right[1]=Wminus[0]/Wminus[6];
+     right[2]=Wminus[1]/Wminus[6];
+     right[3]=Wminus[2]/Wminus[6];
+     right[4]=compute_pressure<number>(Wminus);
+     right[5]=Wminus[3];
+     right[6]=Wminus[4];
+     right[7]=Wminus[5];
      
-     number p_minus=compute_pressure<number>(Wminus), p_plus=compute_pressure<number>(Wplus);
+     rho = logavg (left[0], right[0]);
+     u[0]   = 0.5 * (left[1] + right[1]);
+     u[1]   = 0.5 * (left[2] + right[2]);
+     u[2]   = 0.5 * (left[3] + right[3]);
      
      unorm= u[0]*normal[0] + u[1]*normal[1];
      
-     ul2 = (Wplus[0]*Wplus[0] + Wplus[1]*Wplus[1] + Wplus[2]*Wplus[2])/(Wplus[6]*Wplus[6]);
-     ur2 = (Wminus[0]*Wminus[0] + Wminus[1]*Wminus[1] + Wminus[2]*Wminus[2])/(Wminus[6]*Wminus[6]);
+     ul2 = left[1]*left[1] + left[2]*left[2] + left[3]*left[3];
+     ur2 = right[1]*right[1] + right[2]*right[2] + right[3]*right[3];
      q2  = 0.5 * (ul2 + ur2);
 
-   B1   = 0.5 * (Wplus[3] + Wminus[3]);
-   B2   = 0.5 * (Wplus[4] + Wminus[4]);
-   B3   = 0.5 * (Wplus[5] + Wminus[5]);
+   B1   = 0.5 * (left[5] + right[5]);
+   B2   = 0.5 * (left[6] + right[6]);
+   B3   = 0.5 * (left[7] + right[7]);
    Bnorm= B1*normal[0] + B2*normal[1];
 
-   Bl2 = Wplus[3]*Wplus[3] + Wplus[4]*Wplus[4] + Wplus[5]*Wplus[5];
-   Br2 = Wminus[3]*Wminus[3] + Wminus[4]*Wminus[4] + Wminus[5]*Wminus[5];
+   Bl2 = left[5]*left[5] + left[6]*left[6] + left[7]*left[7];
+   Br2 = right[5]*right[5] + right[6]*right[6] + right[7]*right[7];
    mB2  = 0.5*(Bl2 + Br2);
    
-   betal = Wplus[6]/(2.0*p_plus);
-   betar = Wminus[6]/(2.0*p_minus);
+   betal = left[0]/(2.0*left[4]);
+   betar = right[0]/(2.0*right[4]);
    beta  = logavg(betal, betar);
    
-   rho_a = 0.5*(Wplus[6]+Wminus[6]);
+   rho_a = 0.5*(left[0]+right[0]);
    beta_a = 0.5*(betal+betar);
    p   = 0.5 * rho_a / beta_a;
 
-   bu1   = (betal*Wplus[0]/Wplus[6] + betar*Wminus[0]/Wminus[6])/(betal+betar);
-   bu2   = (betal*Wplus[1]/Wplus[6] + betar*Wminus[1]/Wminus[6])/(betal+betar);
-   bu3   = (betal*Wplus[2]/Wplus[6] + betar*Wminus[2]/Wminus[6])/(betal+betar);
+   bu1   = (betal*left[1] + betar*right[1])/(betal+betar);
+   bu2   = (betal*left[2] + betar*right[2])/(betal+betar);
+   bu3   = (betal*left[3] + betar*right[3])/(betal+betar);
    bunorm= bu1*normal[0] + bu2*normal[1];
    
-   normal_flux[6] = rho * unorm;
-   normal_flux[0] = (p + 0.5*mB2)*normal[0] + u[0] * normal_flux[6] - Bnorm * B1;
-   normal_flux[1] = (p + 0.5*mB2)*normal[1] + u[1] * normal_flux[6] - Bnorm * B2;
-   normal_flux[2] =                           u[2] * normal_flux[6] - Bnorm * B3;
-   normal_flux[3] = bunorm * B1 - bu1 * Bnorm;
-   normal_flux[4] = bunorm * B2 - bu2 * Bnorm;
-   normal_flux[5] = bunorm * B3 - bu3 * Bnorm;
-   normal_flux[7] = 0.5*( 1/(g_1*beta) - q2) * normal_flux[6] + u[0] * normal_flux[0]
-		    + u[1] * normal_flux[1] + u[2] * normal_flux[2] + B1 * normal_flux[3] 
-		    + B2*normal_flux[4] + B3 * normal_flux[5] - 0.5*unorm*mB2 
-		    + (u[0]*B1+u[1]*B2+u[2]*B3)*Bnorm;
+   flux[0] = rho * unorm;
+   flux[1] = (p + 0.5*mB2)*normal[0] + u[0] * flux[0] - Bnorm * B1;
+   flux[2] = (p + 0.5*mB2)*normal[1] + u[1] * flux[0] - Bnorm * B2;
+   flux[3] =                           u[2] * flux[0] - Bnorm * B3;
+   flux[5] = bunorm * B1 - bu1 * Bnorm;
+   flux[6] = bunorm * B2 - bu2 * Bnorm;
+   flux[7] = bunorm * B3 - bu3 * Bnorm;
+   flux[4] = 0.5*( 1/(g_1*beta) - q2) * flux[0]
+             + u[0] * flux[1] + u[1] * flux[2] + u[2] * flux[3]
+             + B1 * flux[5] + B2*flux[6] + B3 * flux[7]
+             - 0.5*unorm*mB2 + (u[0]*B1+u[1]*B2+u[2]*B3)*Bnorm;
  
    // Add entropy dissipation
    // normal vector
@@ -2479,44 +2500,44 @@ struct MHDEquations
    // Primitive eigenvectors
    
    // entropy wave
-   Rp[0][0] = 0;
+   Rp[0][0] = g1*srho;
    Rp[1][0] = 0;
    Rp[2][0] = 0;
    Rp[3][0] = 0;
    Rp[4][0] = 0;
    Rp[5][0] = 0;
-   Rp[6][0] = g1*srho;
+   Rp[6][0] = 0;
    Rp[7][0] = 0;
    
    // divergence wave
    Rp[0][1] = 0;
    Rp[1][1] = 0;
    Rp[2][1] = 0;
-   Rp[3][1] = g2*a*n1;
-   Rp[4][1] = g2*a*n2;
-   Rp[5][1] = g2*a*n3;
-   Rp[6][1] = 0;
-   Rp[7][1] = 0;
-
+   Rp[3][1] = 0;
+   Rp[4][1] = 0;
+   Rp[5][1] = g2*a*n1;
+   Rp[6][1] = g2*a*n2;
+   Rp[7][1] = g2*a*n3;
+   
    // alfven waves
    // np x n
    npn1 = np2*n3 - np3*n2;
    npn2 = np3*n1 - np1*n3;
    npn3 = np1*n2 - np2*n1;
 
-   Rp[0][2] = g3*a*npn1/srho;
-   Rp[1][2] = g3*a*npn2/srho;
-   Rp[2][2] = g3*a*npn3/srho;
-   Rp[3][2] = g3*a*npn1;
-   Rp[4][2] = g3*a*npn2;
-   Rp[5][2] = g3*a*npn3;
-   Rp[6][2] = 0;
-   Rp[7][2] = 0;
+   Rp[0][2] = 0;
+   Rp[1][2] = g3*a*npn1/srho;
+   Rp[2][2] = g3*a*npn2/srho;
+   Rp[3][2] = g3*a*npn3/srho;
+   Rp[4][2] = 0;
+   Rp[5][2] = g3*a*npn1;
+   Rp[6][2] = g3*a*npn2;
+   Rp[7][2] = g3*a*npn3;
 
-   Rp[0][3] = -Rp[0][2];
+   Rp[0][3] =  Rp[0][2];
    Rp[1][3] = -Rp[1][2];
    Rp[2][3] = -Rp[2][2];
-   Rp[3][3] =  Rp[3][2];
+   Rp[3][3] = -Rp[3][2];
    Rp[4][3] =  Rp[4][2];
    Rp[5][3] =  Rp[5][2];
    Rp[6][3] =  Rp[6][2];
@@ -2528,19 +2549,19 @@ struct MHDEquations
    s2  = (alpf*a*a*n2 + alps*a*(bnp*n2 - bn*np2))/(srho*cf);
    s3  = (alpf*a*a*n3 + alps*a*(bnp*n3 - bn*np3))/(srho*cf);
    
-   Rp[0][4] =  -g3*s1;
-   Rp[1][4] =  -g3*s2;
-   Rp[2][4] =  -g3*s3;
-   Rp[3][4] =  g3*alps*a*np1;
-   Rp[4][4] =  g3*alps*a*np2;
-   Rp[5][4] =  g3*alps*a*np3;
-   Rp[6][4] =  g3*alpf*srho;
-   Rp[7][4] =  g3*alpf*srho*a*a;
+   Rp[0][4] =  g3*alpf*srho;
+   Rp[1][4] = -g3*s1;
+   Rp[2][4] = -g3*s2;
+   Rp[3][4] = -g3*s3;
+   Rp[4][4] =  g3*alpf*srho*a*a;
+   Rp[5][4] =  g3*alps*a*np1;
+   Rp[6][4] =  g3*alps*a*np2;
+   Rp[7][4] =  g3*alps*a*np3;
    
-   Rp[0][5] = -Rp[0][4];
+   Rp[0][5] =  Rp[0][4];
    Rp[1][5] = -Rp[1][4];
    Rp[2][5] = -Rp[2][4];
-   Rp[3][5] =  Rp[3][4];
+   Rp[3][5] = -Rp[3][4];
    Rp[4][5] =  Rp[4][4];
    Rp[5][5] =  Rp[5][4];
    Rp[6][5] =  Rp[6][4];
@@ -2559,19 +2580,19 @@ struct MHDEquations
    t2 = sbn*(alps*a*bn*n2 + alpf*cf2*np2)/(srho*cf);
    t3 = sbn*(alps*a*bn*n3 + alpf*cf2*np3)/(srho*cf);
    
-   Rp[0][6] = -g3*t1;
-   Rp[1][6] = -g3*t2;
-   Rp[2][6] = -g3*t3;
-   Rp[3][6] = -g3*alpf*a*np1;
-   Rp[4][6] = -g3*alpf*a*np2;
-   Rp[5][6] = -g3*alpf*a*np3;
-   Rp[6][6] =  g3*alps*srho;
-   Rp[7][6] =  g3*alps*srho*a*a;
+   Rp[0][6] =  g3*alps*srho;
+   Rp[1][6] = -g3*t1;
+   Rp[2][6] = -g3*t2;
+   Rp[3][6] = -g3*t3;
+   Rp[4][6] =  g3*alps*srho*a*a;
+   Rp[5][6] = -g3*alpf*a*np1;
+   Rp[6][6] = -g3*alpf*a*np2;
+   Rp[7][6] = -g3*alpf*a*np3;
 
-   Rp[0][7] = -Rp[0][6];
+   Rp[0][7] =  Rp[0][6];
    Rp[1][7] = -Rp[1][6];
    Rp[2][7] = -Rp[2][6];
-   Rp[3][7] =  Rp[3][6];
+   Rp[3][7] = -Rp[3][6];
    Rp[4][7] =  Rp[4][6];
    Rp[5][7] =  Rp[5][6];
    Rp[6][7] =  Rp[6][6];
@@ -2584,30 +2605,30 @@ struct MHDEquations
    	for(unsigned int j = 0; j < n_components; j++)
 	   Jac[i][j]    = 0.0;
 
-   Jac[6][6] = 1.0;
-   Jac[0][6] = u[0];
-   Jac[1][6] = u[1];
-   Jac[2][6] = u[2];
-   Jac[7][6] = Kin;
-
-   Jac[0][0] = rho;
-   Jac[7][0] = rho*u[0];
+   Jac[0][0] = 1.0;
+   Jac[1][0] = u[0];
+   Jac[2][0] = u[1];
+   Jac[3][0] = u[2];
+   Jac[4][0] = Kin;
 
    Jac[1][1] = rho;
-   Jac[7][1] = rho*u[1];
+   Jac[4][1] = rho*u[0];
 
    Jac[2][2] = rho;
-   Jac[7][2] = rho*u[2];
+   Jac[4][2] = rho*u[1];
 
-   Jac[7][7] = g4;
+   Jac[3][3] = rho;
+   Jac[4][3] = rho*u[2];
 
-   Jac[7][3] = B1;
-   Jac[7][4] = B2;
-   Jac[7][5] = B3;
+   Jac[4][4] = g4;
 
-   Jac[3][3] = 1.0;
-   Jac[4][4] = 1.0;
+   Jac[4][5] = B1;
+   Jac[4][6] = B2;
+   Jac[4][7] = B3;
+
    Jac[5][5] = 1.0;
+   Jac[6][6] = 1.0;
+   Jac[7][7] = 1.0;
 
    // Conserved eigenvectors: R = Jac * Rp
    for(unsigned int i=0; i<n_components; i++)
@@ -2615,7 +2636,7 @@ struct MHDEquations
       for(unsigned int j=0; j<n_components; j++)
       {
          R[i][j] = 0.0;
-         for(unsigned int k=1; k<n_components; k++)
+         for(unsigned int k=0; k<n_components; k++)
             R[i][j] += Jac[i][k]*Rp[k][j];
       }
    }
@@ -2630,34 +2651,11 @@ struct MHDEquations
    Lambda[7] = abs(unorm+cs);
 
    // Compute z
-   computez(R, Wplus,  zl);
-   computez(R, Wminus, zr);
-   
-   /*double z[n_components], q[n_components],
-          du1 = (Wminus[0]/Wminus[6]-Wplus[0]/Wplus[6]),
-	  du2 = (Wminus[1]/Wminus[6]-Wplus[1]/Wplus[6]),
-	  du3 = (Wminus[2]/Wminus[6]-Wplus[2]/Wplus[6]),
-	  dbeta = betar-betal;
-	  
-   q[6]=(Wminus[6]-Wplus[6])/rho - 2*beta_a*(u[0]*du1 + u[1]*du2 + u[2]*du3)
-        + (1/(g_1*beta))*dbeta;
-   q[0]=2*(beta_a*du1 + u[0]*dbeta);
-   q[1]=2*(beta_a*du2 + u[1]*dbeta);
-   q[2]=2*(beta_a*du3 + u[2]*dbeta);
-   q[3]=2*(beta_a*(Wminus[3] - Wplus[3]) + B1*dbeta);
-   q[4]=2*(beta_a*(Wminus[4] - Wplus[4]) + B2*dbeta);
-   q[5]=2*(beta_a*(Wminus[5] - Wplus[5]) + B3*dbeta);
-   q[7]=-2*dbeta;
-   
-     for(unsigned int i=0; i<n_components;i++)
-     {
-       z[i] = 0.0;
-       for(unsigned int j=0; j<n_components;j++)
-	 z[i] += R[j][i] * q[j];
-     }//*/
+   computez(R, left,  zl);
+   computez(R, right, zr);
 
    for(unsigned int i=0; i<n_components; i++)
-      dz[i] = Lambda[i] * (zr[i]-zl[i]); //z[i]; //
+      dz[i] = Lambda[i] * (zr[i] - zl[i]);
    
    for(unsigned int i=0; i<n_components; i++)
    {
@@ -2665,9 +2663,17 @@ struct MHDEquations
       for(unsigned int j=0; j<n_components; j++)
          Diff += R[i][j] * dz[j];
       
-      normal_flux[i] -= 0.5*Diff;
+      flux[i] -= 0.5*Diff;
    }
-
+   
+   normal_flux[0] = flux[1];
+   normal_flux[1] = flux[2];
+   normal_flux[2] = flux[3];
+   normal_flux[3] = flux[5];
+   normal_flux[4] = flux[6];
+   normal_flux[5] = flux[7];
+   normal_flux[6] = flux[0];
+   normal_flux[7] = flux[4];
    
    }
    
