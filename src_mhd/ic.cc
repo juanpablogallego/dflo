@@ -139,6 +139,37 @@ void AlfvenWaves<dim>::vector_value (const Point<dim> &p,
 }
 
 //--------------------------------------------------------------------------------------------
+// Initial condition for the Orszag-Tang vortex.
+// This is setup for 2-d case only
+//--------------------------------------------------------------------------------------------
+template <int dim>
+void Orszag_Tang_vortex<dim>::vector_value (const Point<dim> &p,
+                                      Vector<double>   &values) const
+{
+   const double gamma = MHDEquations<dim>::gas_gamma;
+   double sqpi4 = 1/std::sqrt(4*M_PI);
+   double rho = 25/(36*M_PI),
+          pre = 5/(12*M_PI),
+	  vex = -std::sin(2*M_PI*p[1]),
+	  vey = std::sin(2*M_PI*p[0]),
+	  vez = 0,
+	  bx  = -sqpi4*std::sin(2*M_PI*p[1]),
+	  by  = sqpi4*std::sin(4*M_PI*p[0]),
+	  bz  = 0;
+   
+   values[MHDEquations<dim>::momentum_component]   = rho * vex;
+   values[MHDEquations<dim>::momentum_component+1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component+2] = rho * vez;
+   values[MHDEquations<dim>::magnetic_component]   = bx;
+   values[MHDEquations<dim>::magnetic_component+1] = by;
+   values[MHDEquations<dim>::magnetic_component+2] = bz;
+   values[MHDEquations<dim>::density_component]    = rho;
+   values[MHDEquations<dim>::energy_component]     = pre/(gamma-1)
+						     + 0.5 * rho * (vex*vex + vey*vey + vez*vez)
+						     + 0.5 * (bx*bx + by*by + bz*bz);
+}
+
+//--------------------------------------------------------------------------------------------
 // Keplerian disk
 // TODO TO BE COMPLETED
 //--------------------------------------------------------------------------------------------
@@ -191,6 +222,9 @@ void ConservationLaw<dim>::set_initial_condition_Qk ()
    else if(parameters.ic_function == "alfven")
       VectorTools::interpolate(mapping(), dof_handler,
                                AlfvenWaves<dim>(), old_solution);
+   else if(parameters.ic_function == "orszag")
+      VectorTools::interpolate(mapping(), dof_handler,
+                               Orszag_Tang_vortex<dim>(), old_solution);
    else
       VectorTools::interpolate(mapping(), dof_handler,
                                parameters.initial_conditions, old_solution);
@@ -210,6 +244,7 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
    IsentropicVortex<dim> isentropic_vortex(0.5, 0.0, 5.0, 0.0, 0.0);
    VortexSystem<dim> vortex_system;
    AlfvenWaves<dim> alfven;
+   Orszag_Tang_vortex<dim> orszag;
    Function<dim>* ic_function;
    if(parameters.ic_function == "rt")
       ic_function = &rayleigh_taylor;
@@ -219,6 +254,8 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
       ic_function = &vortex_system;
    else if(parameters.ic_function == "alfven")
       ic_function = &alfven;
+   else if(parameters.ic_function == "orszag")
+      ic_function = &orszag;
    else
       ic_function = &parameters.initial_conditions;
 
