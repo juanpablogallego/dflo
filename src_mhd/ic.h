@@ -105,6 +105,19 @@ public:
 };
 
 //------------------------------------------------------------------------
+// Orszag-Tang vortex
+//------------------------------------------------------------------------
+template <int dim>
+class Orszag_Tang_vortex : public dealii::Function<dim>
+{
+public:
+   Orszag_Tang_vortex () : dealii::Function<dim>(MHDEquations<dim>::n_components){}
+   virtual void vector_value (const dealii::Point<dim>  &p,
+                              dealii::Vector<double>  &values) const;
+};
+
+
+//------------------------------------------------------------------------
 // Keplerian Disk TODO TO BE COMPLETED
 //------------------------------------------------------------------------
 template <int dim>
