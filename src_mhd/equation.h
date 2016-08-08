@@ -2041,6 +2041,7 @@ struct MHDEquations
        
        // Powell terms for the momentum components
        flux[momentum_component + i] = W[magnetic_component + i];
+       //flux[momentum_component + i] = 0;
        // Powell terms for the magnetic components
        flux[magnetic_component + i] = velocity;
        // Powell terms for the energy component
@@ -2071,60 +2072,802 @@ struct MHDEquations
          flux[d] = pressure * normal[d] + W[d] * vdotn;
    }//*/
    
+   
+   //---------------------------------------------------------------------------
+   // Compute R matrix for transformation into characteristic variables
+   //---------------------------------------------------------------------------
+   
+   static
+   void Compute_R(const dealii::Vector<double> &W,
+		  double (&R)[n_components][n_components],
+		  double (&n)[v_components]
+		 )
+   {
+     // compute needed values
+     double r = W[density_component];
+     double g = gas_gamma, g_1 = g-1, r_1=1/r, r_2=1/std::sqrt(r);
+     
+     double p = compute_pressure<double>(W);
+     double c = std::sqrt(g*p/r);
+     
+     double u[v_components], u2 = 0, un = 0;
+     double b[v_components], bb[v_components], b2 = 0, bb2 = 0, bn = 0;
+     
+     for(unsigned int i=0; i<v_components; i++)
+     {
+       u[i]=W[i]*r_1;
+       b[i]=W[magnetic_component+i];
+       
+       u2  += u[i]*u[i];
+       un  += u[i]*n[i];
+       b2  += b[i]*b[i];
+       bb[i]= W[magnetic_component+i]*r_2;
+       bb2 += bb[i]*bb[i];
+       bn  += bb[i]*n[i];
+     }
+     
+     // Compute eigenvector matrix R
+     R[0][0]=0; R[0][1]=0;
+     R[1][0]=0; R[1][1]=0;
+     R[2][0]=0; R[2][1]=0;
+     R[3][0]=0; R[3][1]=0;
+     R[4][0]=1; R[4][1]=0;
+     R[5][0]=0; R[5][1]=n[0];
+     R[6][0]=0; R[6][1]=n[1];
+     R[7][0]=0; R[7][1]=n[2];
+     
+     double np[v_components];
+     /*double ff = abs(bb2 - bn*bn), bet, alp;
+     if(ff < 1.0e-10)
+     {
+       if(abs(n[1]) < 1.0e-14)
+       {
+	 np[0] = 0.0;
+	 np[1] = 1.0/sqrt(2.0);
+	 np[2] = 1.0/sqrt(2.0);
+       }
+       else
+       {
+         np[0] = 1.0/sqrt(2.0);
+         np[1] = 0.0;
+         np[2] = 1.0/sqrt(2.0);
+      }
+   }
+   else
+   {
+      bet = 1.0/sqrt(ff);
+      alp = - bet * bn;
+      np[0] = alp*n[0] + bet*bb[0];
+      np[1] = alp*n[1] + bet*bb[1];
+      np[2] = alp*n[2] + bet*bb[2];
+   }//*/
+     
+     double alp = std::sqrt(bb2-bn*bn);
+     np[0]=n[1]*b[2]-n[2]*b[1];
+     np[1]=n[2]*b[0]-n[0]*b[2];
+     np[2]=n[0]*b[1]-n[1]*b[0];
+     
+     // l is in fact np
+     R[0][2] = 0;
+     R[1][2] = np[0];
+     R[2][2] = np[1];
+     R[3][2] = np[2];
+     R[4][2] = 0;
+     R[5][2] = -np[0];
+     R[6][2] = -np[1];
+     R[7][2] = -np[2];
+     
+     R[0][3] = 0;
+     R[1][3] = np[0];
+     R[2][3] = np[1];
+     R[3][3] = np[2];
+     R[4][3] = 0;
+     R[5][3] = np[0];
+     R[6][3] = np[1];
+     R[7][3] = np[2];
+     
+     double a = sqrt(g*p*r_1);
+     double cf2 = 0.5*(a*a + bb2) + 0.5*sqrt( (a*a+bb2)*(a*a+bb2) - 4.0*a*a*bn*bn);
+     double cs2 = 0.5*(a*a + bb2) - 0.5*sqrt( (a*a+bb2)*(a*a+bb2) - 4.0*a*a*bn*bn);
+     double cf = sqrt(cf2);
+     double cs = sqrt(abs(cs2)); // cs may be zero or close to zero
+     
+     //double alpf = sqrt( abs((a*a - cs2)/(cf2 - cs2)) );
+     //double alps = sqrt( abs((cf2 - a*a)/(cf2 - cs2)) );
+     
+     double alpf2 = c*c, alps2 = c*c;
+     
+     double Bp[v_components];
+     double lf[v_components], ls[v_components], mf[v_components], ms[v_components];
+     for(unsigned int i=0; i<v_components; i++)
+     {
+       Bp[i]=bb[i]-bn*n[i];
+       
+       lf[i] = cf*(n[i]-Bp[i]*bn/(cf2-bn*bn));
+       ls[i] = cs*(n[i]-Bp[i]*bn/(cs2-bn*bn));
+       mf[i] = cf2*(Bp[i]/(cf2-bn*bn));
+       ms[i] = cs2*(Bp[i]/(cs2-bn*bn));
+       
+       alpf2 += lf[i]*lf[i] + mf[i]*mf[i];
+       alps2 += ls[i]*ls[i] + ms[i]*ms[i];
+     }
+     
+     double alpf = 1/std::sqrt(alpf2);
+     double alps = 1/std::sqrt(alps2);
+     
+     R[0][4] = alpf*c;
+     R[1][4] = alpf*lf[0];
+     R[2][4] = alpf*lf[1];
+     R[3][4] = alpf*lf[2];
+     R[4][4] = 0;
+     R[5][4] = alpf*mf[0];
+     R[6][4] = alpf*mf[1];
+     R[7][4] = alpf*mf[2];
+     
+     R[0][5] =-alpf*c;
+     R[1][5] = alpf*lf[0];
+     R[2][5] = alpf*lf[1];
+     R[3][5] = alpf*lf[2];
+     R[4][5] = 0;
+     R[5][5] =-alpf*mf[0];
+     R[6][5] =-alpf*mf[1];
+     R[7][5] =-alpf*mf[2];
+     
+     R[0][6] = alps*c;
+     R[1][6] = alps*ls[0];
+     R[2][6] = alps*ls[1];
+     R[3][6] = alps*ls[2];
+     R[4][6] = 0;
+     R[5][6] = alps*ms[0];
+     R[6][6] = alps*ms[1];
+     R[7][6] = alps*ms[2];
+     
+     R[0][7] =-alps*c;
+     R[1][7] = alps*ls[0];
+     R[2][7] = alps*ls[1];
+     R[3][7] = alps*ls[2];
+     R[4][7] = 0;
+     R[5][7] =-alps*ms[0];
+     R[6][7] =-alps*ms[1];
+     R[7][7] =-alps*ms[2];
+     
+     
+   }
+   
+   //---------------------------------------------------------------------------
+   // Compute M and Minv matrices for characteristic transformation
+   //---------------------------------------------------------------------------
+   
+   static
+   void Compute_M(const dealii::Vector<double> &W,
+		  double (&M)[n_components][n_components],
+		  double (&Mi)[n_components][n_components]
+		 )
+   {
+     double r = W[density_component];
+     double p = compute_pressure<double>(W);
+     double c = std::sqrt(gas_gamma*p/r);
+     
+     double g = gas_gamma, g_1 = g-1, r_1=1/r, r2=std::sqrt(r);
+     
+     double u[v_components], u2 = 0;
+     //double bb[v_components];
+     double b[v_components];
+     
+     double alpha = r/c;
+     
+     
+     for(unsigned int i=0; i<v_components; i++)
+     {
+       u[i]=W[i]*r_1;
+       u2+=u[i]*u[i];
+     }
+     
+     for(unsigned int i=0; i<v_components; i++)
+       b[i]=W[magnetic_component+i];
+       //bb[i]=W[magnetic_component+i]*r_2;
+     
+     double H = c*c/(g_1) + u2/2;
+     
+     for(unsigned int i=0; i<n_components; i++)
+       for(unsigned int j=0; j<n_components; j++)
+       {
+	 M[i][j] = 0;
+	 Mi[i][j] = 0;
+       }
+     
+     // Jacobian from conse3rvative to entropy variables
+     M[0][0]=alpha;
+     M[1][0]=alpha*u[0];
+     M[2][0]=alpha*u[1];
+     M[3][0]=alpha*u[2];
+     M[4][0]=alpha*H;
+     
+     M[1][1]=M[2][2]=M[3][3]=r;
+     
+     M[4][1]=r*u[0];
+     M[4][2]=r*u[1];
+     M[4][3]=r*u[2];
+     
+     M[0][4]=-alpha;
+     M[1][4]=-alpha*u[0];
+     M[2][4]=-alpha*u[1];
+     M[3][4]=-alpha*u[2];
+     M[4][4]=-0.5*alpha*u2;
+     
+     M[4][5]=b[0]*r2;
+     M[4][6]=b[1]*r2;
+     M[4][7]=b[2]*r2;
+     
+     M[5][5]=M[6][6]=M[7][7]=r2;
+     
+     // Jacobian from entropy to conservative variables
+     
+     double gb = g_1/(r*c);
+     
+     Mi[0][0]=gb*u2/c;
+     Mi[0][1]=Mi[4][1]=-gb*u[0];
+     Mi[0][2]=Mi[4][2]=-gb*u[1];
+     Mi[0][3]=Mi[4][3]=-gb*u[2];
+     
+     Mi[0][4]=Mi[4][4]=gb;
+     
+     Mi[0][5]=Mi[4][5]=-gb*b[0];
+     Mi[0][6]=Mi[4][6]=-gb*b[1];
+     Mi[0][7]=Mi[4][7]=-gb*b[2];
+     
+     Mi[1][0]=-u[0]/r;
+     Mi[2][0]=-u[1]/r;
+     Mi[3][0]=-u[2]/r;
+     
+     Mi[1][1]=Mi[2][2]=Mi[3][3]=1/r;
+     
+     Mi[4][0]=gb*(u2-H);
+     
+     Mi[5][5]=Mi[6][6]=Mi[7][7]=1/r2;
+   }
+   
+   
+   //------------------------------------------------------------------------------
+   // Eigensystem from Fengyan Li
+   //------------------------------------------------------------------------------
+   static
+   void compute_Rx_Lx (const dealii::Vector<double> &W,
+                              double            (&evR)[n_components][n_components],
+                              double            (&evL)[n_components][n_components]
+			     )
+   {
+      double rho = W[density_component],
+	     velx=W[0]/rho,
+	     vely=W[1]/rho,
+	     velz=W[2]/rho,
+	     bmx=W[magnetic_component],
+	     bmy=W[magnetic_component+1],
+	     bmz=W[magnetic_component+2],
+	     ene=W[energy_component];
+ 
+      double vn2=velx*velx+vely*vely+velz*velz,
+	     bm2=bmx*bmx+bmy*bmy+bmz*bmz;
+ 
+      double pp=(gas_gamma-1.0)*(ene-0.5*rho*vn2-0.5*bm2);
+
+      if(pp<0.0)
+	std::cout<< "(x) pressure is "<< pp<<"\n";
+
+      double a2=gas_gamma*pp/rho,
+	     aa=sqrt(a2),
+	     bx=bmx/sqrt(rho),
+	     b2=bm2/rho;
+ 
+      double ca=abs(bx),
+	     cf=sqrt(0.5*(a2+b2+sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx))),
+	     cs=sqrt(0.5*(a2+b2-sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx)));
+
+      double sbx;
+      if(bmx>=0.0)
+	sbx=1.0;
+      else
+	sbx=-1.0;
+
+//... defination
+      double tmp=bmy*bmy+bmz*bmz;
+    
+      double bey, bez;
+      if(tmp>bm2*1.0e-12)
+      {
+        bey=bmy/std::sqrt(tmp);
+        bez=bmz/std::sqrt(tmp);
+      }
+      else
+      {
+        bey=std::sqrt(0.5);
+        bez=bey;
+      }
+      
+      double tmp1, alf, als;
+      if((tmp>bm2*1.0e-12)||(abs(gas_gamma*pp-bmx*bmx)>gas_gamma*pp*1.0e-12))
+      {
+	tmp1=cf*cf-cs*cs;
+	alf=sqrt(abs((a2-cs*cs)/tmp1));
+	als=sqrt(abs((cf*cf-a2)/tmp1));
+      }
+      else
+      {
+	alf=sqrt(0.5);
+	als=alf;
+      }
+
+      double gamma0=(gas_gamma-1.0)/2.0,
+             gamma2=(gas_gamma-2.0)/(gas_gamma-1.0),
+             tau=(gas_gamma-1.0)/a2,
+             gf=alf*cf*velx-als*cs*sbx*(bey*vely+bez*velz),
+             ga=sbx*(bez*vely-bey*velz),
+             gs=als*cs*velx+alf*cf*sbx*(bey*vely+bez*velz);
+
+      evR[0][0]=alf;
+      evR[1][0]=alf*(velx-cf);
+      evR[2][0]=alf*vely+als*cs*bey*sbx;
+      evR[3][0]=alf*velz+als*cs*bez*sbx;
+      evR[4][0]=0.0;
+      evR[5][0]=als*sqrt(a2/rho)*bey;
+      evR[6][0]=als*sqrt(a2/rho)*bez;
+      evR[7][0]=alf*(0.5*vn2+cf*cf-gamma2*a2)-gf;
+      
+      evR[0][7]=alf;
+      evR[1][7]=alf*(velx+cf);
+      evR[2][7]=alf*vely-als*cs*bey*sbx;
+      evR[3][7]=alf*velz-als*cs*bez*sbx;
+      evR[4][7]=0.0;
+      evR[5][7]=als*sqrt(a2/rho)*bey;
+      evR[6][7]=als*sqrt(a2/rho)*bez;
+      evR[7][7]=alf*(0.5*vn2+cf*cf-gamma2*a2)+gf;
+         
+      evR[0][2]=als;
+      evR[1][2]=als*(velx-cs);
+      evR[2][2]=als*vely-alf*cf*bey*sbx;
+      evR[3][2]=als*velz-alf*cf*bez*sbx;
+      evR[4][2]=0.0;
+      evR[5][2]=-alf*sqrt(a2/rho)*bey;
+      evR[6][2]=-alf*sqrt(a2/rho)*bez;
+      evR[7][2]=als*(0.5*vn2+cs*cs-gamma2*a2)-gs;
+      
+      evR[0][5]=als;
+      evR[1][5]=als*(velx+cs);
+      evR[2][5]=als*vely+alf*cf*bey*sbx;
+      evR[3][5]=als*velz+alf*cf*bez*sbx;
+      evR[4][5]=0.0;
+      evR[5][5]=-alf*sqrt(a2/rho)*bey;
+      evR[6][5]=-alf*sqrt(a2/rho)*bez;
+      evR[7][5]=als*(0.5*vn2+cs*cs-gamma2*a2)+gs;
+
+      evR[0][1]=0.0;
+      evR[1][1]=0.0;
+      evR[2][1]=-bez*sbx;
+      evR[3][1]=bey*sbx;
+      evR[4][1]=0.0;
+      evR[5][1]=-bez/sqrt(rho);
+      evR[6][1]=bey/sqrt(rho);
+      evR[7][1]=-ga;
+      
+      evR[0][6]=0.0;
+      evR[1][6]=0.0;
+      evR[2][6]=-bez*sbx;
+      evR[3][6]=bey*sbx;
+      evR[4][6]=0.0;
+      evR[5][6]=bez/sqrt(rho);
+      evR[6][6]=-bey/sqrt(rho);
+      evR[7][6]=-ga;
+      
+      evR[0][3]=1.0;
+      evR[1][3]=velx;
+      evR[2][3]=vely;
+      evR[3][3]=velz;
+      evR[4][3]=0.0;
+      evR[5][3]=0.0;
+      evR[6][3]=0.0;
+      evR[7][3]=vn2/2.0;
+      
+      evR[0][4]=0.0;
+      evR[1][4]=0.0;
+      evR[2][4]=0.0;
+      evR[3][4]=0.0;
+      evR[4][4]=1.0;
+      evR[5][4]=0.0;
+      evR[6][4]=0.0;
+      evR[7][4]=bmx;
+      
+      double tm0=(gas_gamma-1.)*alf;
+      
+      evL[0][0]=(gamma0*alf*vn2+gf)/(2.0*a2);
+      evL[0][1]=((1.0-gas_gamma)*alf*velx-alf*cf)/(2.0*a2);
+      evL[0][2]=((1.0-gas_gamma)*alf*vely+cs*als*bey*sbx)/(2.0*a2);
+      evL[0][3]=((1.0-gas_gamma)*alf*velz+cs*als*bez*sbx)/(2.0*a2);
+      evL[0][4]=(-bmx*tm0)/(2.0*a2);
+      evL[0][5]=((1.0-gas_gamma)*alf*bmy+aa*als*sqrt(rho)*bey)/(2.0*a2);
+      evL[0][6]=((1.0-gas_gamma)*alf*bmz+aa*als*sqrt(rho)*bez)/(2.0*a2);
+      evL[0][7]=tm0/(2.0*a2);
+ 
+      evL[7][0]=(gamma0*alf*vn2-gf)/(2.0*a2);
+      evL[7][1]=((1.0-gas_gamma)*alf*velx+alf*cf)/(2.0*a2);
+      evL[7][2]=((1.0-gas_gamma)*alf*vely-cs*als*bey*sbx)/(2.0*a2);
+      evL[7][3]=((1.0-gas_gamma)*alf*velz-cs*als*bez*sbx)/(2.0*a2);
+      evL[7][4]=(-bmx*tm0)/(2.0*a2);
+      evL[7][5]=((1.0-gas_gamma)*alf*bmy+aa*als*sqrt(rho)*bey)/(2.0*a2);
+      evL[7][6]=((1.0-gas_gamma)*alf*bmz+aa*als*sqrt(rho)*bez)/(2.0*a2);
+      evL[7][7]=(tm0)/(2.0*a2);
+
+      evL[1][0]=0.5*ga;
+      evL[1][1]=0.0;
+      evL[1][2]=0.5*(-bez*sbx);
+      evL[1][3]=0.5*(bey*sbx);
+      evL[1][4]=0.0;
+      evL[1][5]=0.5*(-sqrt(rho)*bez);
+      evL[1][6]=0.5*(sqrt(rho)*bey);
+      evL[1][7]=0.0;
+      
+      evL[6][0]=ga/2;
+      evL[6][1]=0.0;
+      evL[6][2]=-bez*sbx/2;
+      evL[6][3]=bey*sbx/2;
+      evL[6][4]=0.0;
+      evL[6][5]=sqrt(rho)*bez/2;
+      evL[6][6]=-sqrt(rho)*bey/2;
+      evL[6][7]=0.0;
+ 
+      tm0=(gas_gamma-1.0)*als;
+      evL[2][0]=(gamma0*als*vn2+gs)/(2.0*a2);
+      evL[2][1]=((1.0-gas_gamma)*als*velx-als*cs)/(2.0*a2);
+      evL[2][2]=((1.0-gas_gamma)*als*vely-cf*alf*bey*sbx)/(2.0*a2);
+      evL[2][3]=((1.0-gas_gamma)*als*velz-cf*alf*bez*sbx)/(2.0*a2);
+      evL[2][4]=(-bmx*tm0)/(2.0*a2);
+      evL[2][5]=((1.0-gas_gamma)*als*bmy-aa*alf*sqrt(rho)*bey)/(2.0*a2);
+      evL[2][6]=((1.0-gas_gamma)*als*bmz-aa*alf*sqrt(rho)*bez)/(2.0*a2);
+      evL[2][7]=(tm0)/(2.0*a2);
+      
+      evL[5][0]=(gamma0*als*vn2-gs)/(2.0*a2);
+      evL[5][1]=((1-gas_gamma)*als*velx+als*cs)/(2.0*a2);
+      evL[5][2]=((1.0-gas_gamma)*als*vely+cf*alf*bey*sbx)/(2.0*a2);
+      evL[5][3]=((1.0-gas_gamma)*als*velz+cf*alf*bez*sbx)/(2.0*a2);
+      evL[5][4]=(-bmx*tm0)/(2.0*a2);
+      evL[5][5]=((1.0-gas_gamma)*als*bmy-aa*alf*sqrt(rho)*bey)/(2.0*a2);
+      evL[5][6]=((1.0-gas_gamma)*als*bmz-aa*alf*sqrt(rho)*bez)/(2.0*a2);
+      evL[5][7]=(tm0)/(2.0*a2);
+ 
+      evL[3][0]=1-0.5*tau*vn2;
+      evL[3][1]=tau*velx;
+      evL[3][2]=tau*vely;
+      evL[3][3]=tau*velz;
+      evL[3][4]=bmx*tau;
+      evL[3][5]=tau*bmy;
+      evL[3][6]=tau*bmz;
+      evL[3][7]=-tau;
+      
+      evL[4][0]=0.;
+      evL[4][1]=0.;
+      evL[4][2]=0.;
+      evL[4][3]=0.;
+      evL[4][4]=1.0;
+      evL[4][5]=0.;
+      evL[4][6]=0.;
+      evL[4][7]=0.;
+
+   }
+   
+   static
+   void compute_Ry_Ly (const dealii::Vector<double> &W,
+                              double            (&evR)[n_components][n_components],
+                              double            (&evL)[n_components][n_components]
+			     )
+   {
+      double rho = W[density_component],
+	     velx=W[1]/rho,
+	     vely=W[0]/rho,
+	     velz=W[2]/rho,
+	     bmx=W[magnetic_component+1],
+	     bmy=W[magnetic_component],
+	     bmz=W[magnetic_component+2],
+	     ene=W[energy_component];
+ 
+      double vn2=velx*velx+vely*vely+velz*velz,
+	     bm2=bmx*bmx+bmy*bmy+bmz*bmz;
+ 
+            double pp=(gas_gamma-1.0)*(ene-0.5*rho*vn2-0.5*bm2);
+
+      if(pp<0.0)
+	std::cout<< "(y) pressure is "<< pp<<"\n";
+
+      double a2=gas_gamma*pp/rho,
+	     aa=sqrt(a2),
+	     bx=bmx/sqrt(rho),
+	     b2=bm2/rho;
+ 
+      double ca=abs(bx),
+	     cf=sqrt(0.5*(a2+b2+sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx))),
+	     cs=sqrt(0.5*(a2+b2-sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx)));
+
+      double sbx;
+      if(bmx>=0.0)
+	sbx=1.0;
+      else
+	sbx=-1.0;
+
+//... defination
+      double tmp=bmy*bmy+bmz*bmz;
+    
+      double bey, bez;
+      if(tmp>bm2*1.0E-12)
+      {
+        bey=bmy/std::sqrt(tmp);
+        bez=bmz/std::sqrt(tmp);
+      }
+      else
+      {
+        bey=std::sqrt(0.5);
+        bez=bey;
+      }
+      
+      double tmp1, alf, als;
+      if((tmp>bm2*1.0e-12)||(abs(gas_gamma*pp-bmx*bmx)>gas_gamma*pp*1.0e-12))
+      {
+	tmp1=cf*cf-cs*cs;
+	alf=sqrt(abs((a2-cs*cs)/tmp1));
+	als=sqrt(abs((cf*cf-a2)/tmp1));
+      }
+      else
+      {
+	alf=sqrt(0.5);
+	als=alf;
+      }
+
+      double gamma0=(gas_gamma-1.0)/2.0,
+             gamma2=(gas_gamma-2.0)/(gas_gamma-1.0),
+             tau=(gas_gamma-1.0)/a2,
+             gf=alf*cf*velx-als*cs*sbx*(bey*vely+bez*velz),
+             ga=sbx*(bez*vely-bey*velz),
+             gs=als*cs*velx+alf*cf*sbx*(bey*vely+bez*velz);
+	     
+	     
+
+      evR[0][0]=alf;
+      evR[1][0]=alf*vely+als*cs*bey*sbx;
+      evR[2][0]=alf*(velx-cf);
+      evR[3][0]=alf*velz+als*cs*bez*sbx;
+      evR[4][0]=als*sqrt(a2/rho)*bey;
+      evR[5][0]=0.;
+      evR[6][0]=als*sqrt(a2/rho)*bez;
+      evR[7][0]=alf*(0.5*vn2+cf*cf-gamma2*a2)-gf;
+      
+      evR[0][7]=alf,
+      evR[1][7]=alf*vely-als*cs*bey*sbx,
+      evR[2][7]=alf*(velx+cf),
+      evR[3][7]=alf*velz-als*cs*bez*sbx,
+      evR[4][7]=als*sqrt(a2/rho)*bey,
+      evR[5][7]=0.,
+      evR[6][7]=als*sqrt(a2/rho)*bez,
+      evR[7][7]= alf*(0.5*vn2+cf*cf-gamma2*a2)+gf;
+         
+      evR[0][2]=als,
+      evR[1][2]=als*vely-alf*cf*bey*sbx,
+      evR[2][2]=als*(velx-cs),
+      evR[3][2]=als*velz-alf*cf*bez*sbx,
+      evR[4][2]=-alf*sqrt(a2/rho)*bey,
+      evR[5][2]=0.,
+      evR[6][2]=-alf*sqrt(a2/rho)*bez,
+      evR[7][2]=als*(0.5*vn2+cs*cs-gamma2*a2)-gs;
+      
+      evR[0][5]=als,
+      evR[1][5]=als*vely+alf*cf*bey*sbx,
+      evR[2][5]=als*(velx+cs),
+      evR[3][5]=als*velz+alf*cf*bez*sbx,
+      evR[4][5]=-alf*sqrt(a2/rho)*bey,
+      evR[5][5]=0.,
+      evR[6][5]=-alf*sqrt(a2/rho)*bez,
+      evR[7][5]=als*(0.5*vn2+cs*cs-gamma2*a2)+gs;
+
+      evR[0][1]=0.,
+      evR[1][1]=-bez*sbx,
+      evR[2][1]=0.,
+      evR[3][1]=bey*sbx,
+      evR[4][1]=-bez/sqrt(rho),
+      evR[5][1]=0.,
+      evR[6][1]=bey/sqrt(rho),
+      evR[7][1]=-ga;
+      
+      evR[0][6]=0.,
+      evR[1][6]=-bez*sbx,
+      evR[2][6]=0.,
+      evR[3][6]=bey*sbx,
+      evR[4][6]=bez/sqrt(rho),
+      evR[5][6]=0.,
+      evR[6][6]=-bey/sqrt(rho),
+      evR[7][6]=-ga;
+      
+      evR[0][3]=1.0,
+      evR[1][3]=vely,
+      evR[2][3]=velx,
+      evR[3][3]=velz,
+      evR[4][3]=0.,
+      evR[5][3]=0.,
+      evR[6][3]=0.,
+      evR[7][3]=vn2/2.0;
+      
+      evR[0][4]=0.,
+      evR[1][4]=0.,
+      evR[2][4]=0.,
+      evR[3][4]=0.,
+      evR[4][4]=0.,
+      evR[5][4]=1.0,
+      evR[6][4]=0.,
+      evR[7][4]=bmx;
+      
+      double tm0=(gas_gamma-1.0)*alf;
+      
+      evL[0][0]=(gamma0*alf*vn2+gf)/(2.0*a2),evL[0][1]=((1.0-gas_gamma)*alf*vely+cs*als*bey*sbx)/(2.0*a2),evL[0][2]=((1.0-gas_gamma)*alf*velx-alf*cf)/(2.0*a2),
+      evL[0][3]=((1.0-gas_gamma)*alf*velz+cs*als*bez*sbx)/(2.0*a2), evL[0][4]=((1.0-gas_gamma)*alf*bmy+aa*als*sqrt(rho)*bey)/(2.0*a2),
+      evL[0][5]=(-bmx*tm0)/(2.0*a2),evL[0][6]=((1.0-gas_gamma)*alf*bmz+aa*als*sqrt(rho)*bez)/(2.0*a2),evL[0][7]=(tm0)/(2.0*a2);
+ 
+      evL[7][0]=(gamma0*alf*vn2-gf)/(2.0*a2),
+      evL[7][1]=((1.0-gas_gamma)*alf*vely-cs*als*bey*sbx)/(2.0*a2),
+      evL[7][2]=((1.0-gas_gamma)*alf*velx+alf*cf)/(2.0*a2),
+      evL[7][3]=((1.0-gas_gamma)*alf*velz-cs*als*bez*sbx)/(2.0*a2),
+      evL[7][4]=((1.0-gas_gamma)*alf*bmy+aa*als*sqrt(rho)*bey)/(2.0*a2),
+      evL[7][5]=(-bmx*tm0)/(2.0*a2),
+      evL[7][6]=((1.0-gas_gamma)*alf*bmz+aa*als*sqrt(rho)*bez)/(2.0*a2),
+      evL[7][7]=(tm0)/(2.0*a2);
+
+      evL[1][0]=0.5*ga,
+      evL[1][1]=0.5*-bez*sbx,
+      evL[1][2]=0.,
+      evL[1][3]=0.5*bey*sbx,
+      evL[1][4]=0.5*-sqrt(rho)*bez,
+      evL[1][5]=0.5*0.,
+      evL[1][6]=0.5*sqrt(rho)*bey,
+      evL[1][7]=0.;
+      
+      evL[6][0]=0.5*ga,
+      evL[6][1]=0.5*-bez*sbx,
+      evL[6][2]=0.,
+      evL[6][3]=0.5*bey*sbx,
+      evL[6][4]=0.5*sqrt(rho)*bez,
+      evL[6][5]=0.,
+      evL[6][6]=0.5*-sqrt(rho)*bey,
+      evL[6][7]=0.;
+
+      tm0=(gas_gamma-1.0)*als;
+      
+      evL[2][0]=(gamma0*als*vn2+gs)/(2.0*a2),
+      evL[2][1]=((1.0-gas_gamma)*als*vely-cf*alf*bey*sbx)/(2.0*a2),
+      evL[2][2]=((1.0-gas_gamma)*als*velx-als*cs)/(2.0*a2),
+      evL[2][3]=((1.0-gas_gamma)*als*velz-cf*alf*bez*sbx)/(2.0*a2),
+      evL[2][4]=((1.0-gas_gamma)*als*bmy-aa*alf*sqrt(rho)*bey)/(2.0*a2),
+      evL[2][5]=(-bmx*tm0)/(2.0*a2),
+      evL[2][6]=((1.0-gas_gamma)*als*bmz-aa*alf*sqrt(rho)*bez)/(2.0*a2),
+      evL[2][7]=(tm0)/(2.0*a2);
+      
+      evL[5][0]=(gamma0*als*vn2-gs)/(2.0*a2),
+      evL[5][1]=((1.0-gas_gamma)*als*vely+cf*alf*bey*sbx)/(2.0*a2),
+      evL[5][2]=((1-gas_gamma)*als*velx+als*cs)/(2.0*a2),
+      evL[5][3]=((1.0-gas_gamma)*als*velz+cf*alf*bez*sbx)/(2.0*a2), 
+      evL[5][4]=((1.0-gas_gamma)*als*bmy-aa*alf*sqrt(rho)*bey)/(2.0*a2),
+      evL[5][5]=(-bmx*tm0)/(2.0*a2),
+      evL[5][6]=((1.0-gas_gamma)*als*bmz-aa*alf*sqrt(rho)*bez)/(2.0*a2),
+      evL[5][7]=(tm0)/(2.0*a2);
+ 
+      evL[3][0]=1.0-0.5*tau*vn2,
+      evL[3][1]=tau*vely,
+      evL[3][2]=tau*velx,
+      evL[3][3]=tau*velz,
+      evL[3][4]=tau*bmy,
+      evL[3][5]=tau*bmx,
+      evL[3][6]=tau*bmz,
+      evL[3][7]=-tau;
+      
+      evL[4][0]=0.,
+      evL[4][1]=0.,
+      evL[4][2]=0.,
+      evL[4][3]=0.,
+      evL[4][4]=0.,
+      evL[4][5]=1.0,
+      evL[4][6]=0.,
+      evL[4][7]=0.;
+
+   }
+   
+   
    //---------------------------------------------------------------------------
    // Left and right eigenvector matrices
-   // Lx, Rx = along x direction
-   // Ly, Ry = along y direction
+   // MLx, MRx = along x direction
+   // MLy, MRy = along y direction
    // Expressions taken from
    // http://people.nas.nasa.gov/~pulliam/Classes/New_notes/euler_notes.pdf
    // Note: This is implemented only for 2-D
    //---------------------------------------------------------------------------
-   /*static
+   static
    void compute_eigen_matrix (const dealii::Vector<double> &W,
-                              double            (&Rx)[n_components][n_components],
-                              double            (&Lx)[n_components][n_components],
-                              double            (&Ry)[n_components][n_components],
-                              double            (&Ly)[n_components][n_components])
+                              double            (&MRx)[n_components][n_components],
+                              double            (&MLx)[n_components][n_components],
+                              double            (&MRy)[n_components][n_components],
+                              double            (&MLy)[n_components][n_components]
+			     )
    {
-      double g1   = gas_gamma - 1.0;
-      double rho  = W[density_component];
-      double E    = W[energy_component];
-      double u    = W[0] / rho;
-      double v    = W[1] / rho;
-      double q2   = u*u + v*v;
-      double p    = g1 * (E - 0.5 * rho * q2);
-      double c2   = gas_gamma * p / rho;
-      double c    = std::sqrt(c2);
-      double beta = 0.5/c2;
-      double phi2 = 0.5*g1*q2;
-      double h    = c2/g1 + 0.5*q2;
+     
+     compute_Rx_Lx(W,MRx,MLx);
+     compute_Ry_Ly(W,MRy,MLy);
+     
+     // From Jameson's paper
+     //double M[n_components][n_components], Mi[n_components][n_components];
+     //Compute_M(W,M,Mi);
+     
+     /*double nx[v_components], ny[v_components];
+     nx[0]=1;nx[1]=nx[2]=0;
+     ny[1]=1;ny[0]=ny[2]=0;
+     
+     double Rx[n_components][n_components],Ry[n_components][n_components];//*/
+     
+     // From Jameson's paper
+     //Compute_R(W,Rx,nx);
+     //Compute_R(W,Ry,ny);
+     
+     /*for(unsigned int i=0; i<n_components;i++)
+     {
+       for(unsigned int j=0; j<n_components;j++)
+       {
+	 MRx[i][j] = 0;
+	 MRy[i][j] = 0;
+	 MLx[i][j] = 0;
+	 MLy[i][j] = 0;
+	 for(unsigned int k=0; k<n_components;k++)
+	 {
+	   MRx[i][j] += M[i][k]*Rx[k][j];
+	   MRy[i][j] += M[i][k]*Ry[k][j];
+	   MLx[i][j] += Rx[k][i]*Mi[k][j];
+	   MLy[i][j] += Ry[k][i]*Mi[k][j];
+	 }
+       }
+     }//*/
+     
+   }
+   
+   static
+   void compute_eigen_matrix (const dealii::Vector<double> &W,
+                              double            (&MR)[n_components][n_components],
+                              double            (&ML)[n_components][n_components])
+   {
       
-      Rx[0][0] = 1;      Rx[0][1] = 0;  Rx[0][2] = 1;     Rx[0][3] = 1;
-      Rx[1][0] = u;      Rx[1][1] = 0;  Rx[1][2] = u+c;   Rx[1][3] = u-c;
-      Rx[2][0] = v;      Rx[2][1] = -1; Rx[2][2] = v;     Rx[2][3] = v;
-      Rx[3][0] = 0.5*q2; Rx[3][1] = -v; Rx[3][2] = h+c*u; Rx[3][3] = h-c*u;
+      double u    = W[0] / W[density_component];
+      double v    = W[1] / W[density_component];
+      double theta= atan2(v,u);
+      double kx   = cos(theta);
+      double ky   = sin(theta);
       
-      Ry[0][0] = 1;      Ry[0][1] = 0;  Ry[0][2] = 1;     Ry[0][3] = 1;
-      Ry[1][0] = u;      Ry[1][1] = 1;  Ry[1][2] = u;     Ry[1][3] = u;
-      Ry[2][0] = v;      Ry[2][1] = 0;  Ry[2][2] = v+c;   Ry[2][3] = v-c;
-      Ry[3][0] = 0.5*q2; Ry[3][1] = u;  Ry[3][2] = h+c*v; Ry[3][3] = h-c*v;
+      double n[v_components];
+      n[0]=kx; n[1]=ky; n[2]=0;
       
-      Lx[0][0] = 1-phi2/c2;       Lx[0][1] = g1*u/c2;       Lx[0][2] = g1*v/c2;    Lx[0][3] = -g1/c2;
-      Lx[1][0] = v;               Lx[1][1] = 0;             Lx[1][2] = -1;         Lx[1][3] = 0;
-      Lx[2][0] = beta*(phi2-c*u); Lx[2][1] = beta*(c-g1*u); Lx[2][2] = -beta*g1*v; Lx[2][3] = beta*g1;
-      Lx[3][0] = beta*(phi2+c*u); Lx[3][1] =-beta*(c+g1*u); Lx[3][2] = -beta*g1*v; Lx[3][3] = beta*g1;
+      double M[n_components][n_components], Mi[n_components][n_components];
+      Compute_M(W,M,Mi);
+      double R[n_components][n_components];
+      Compute_R(W,R,n);
       
-      Ly[0][0] = 1-phi2/c2;       Ly[0][1] = g1*u/c2;       Ly[0][2] = g1*v/c2;       Ly[0][3] = -g1/c2;
-      Ly[1][0] = -u;              Ly[1][1] = 1;             Ly[1][2] = 0;             Ly[1][3] = 0;
-      Ly[2][0] = beta*(phi2-c*v); Ly[2][1] =-beta*g1*u;     Ly[2][2] = beta*(c-g1*v); Ly[2][3] = beta*g1;
-      Ly[3][0] = beta*(phi2+c*v); Ly[3][1] =-beta*g1*u;     Ly[3][2] =-beta*(c+g1*v); Ly[3][3] = beta*g1;
-      
-   }//*/
+     for(unsigned int i=0; i<n_components;i++)
+     {
+       for(unsigned int j=0; j<n_components;j++)
+       {
+	 MR[i][j] = 0;
+	 ML[i][j] = 0;
+	 for(unsigned int k=0; k<n_components;k++)
+	 {
+	   MR[i][j] += M[i][k]*R[k][j];
+	   ML[i][j] += R[k][i]*Mi[k][j];
+	 }
+       }
+     }
+     
+   }
    
    //---------------------------------------------------------------------------
    // convert from conserved to characteristic variables: W = L*W
    //---------------------------------------------------------------------------
-   /*static
+   static
    void transform_to_char (const double           (&L)[n_components][n_components],
                            dealii::Vector<double> &W)
    {
@@ -2132,19 +2875,22 @@ struct MHDEquations
       
       V[0] = W[density_component];
       V[n_components-1] = W[energy_component];
-      for(unsigned int d=0; d<dim; ++d)
+      for(unsigned int d=0; d<v_components; ++d)
+      {
          V[d+1] = W[d];
+	 V[d+4] = W[magnetic_component+d];
+      }
       
       W = 0;
       for(unsigned int i=0; i<n_components; ++i)
          for(unsigned int j=0; j<n_components; ++j)
             W[i] += L[i][j] * V[j];
-   }//*/
+   }
    
    //---------------------------------------------------------------------------
    // convert from characteristic to conserved variables: W = R*W
    //---------------------------------------------------------------------------
-   /*static
+   static
    void transform_to_con (const double           (&R)[n_components][n_components],
                           dealii::Vector<double> &W)
    {
@@ -2157,11 +2903,14 @@ struct MHDEquations
 
       W[density_component] = V[0];
       W[energy_component] = V[n_components-1];
-      for(unsigned int d=0; d<dim; ++d)
+      for(unsigned int d=0; d<v_components; ++d)
+      {
          W[d] = V[d+1];
+	 W[magnetic_component+d] = V[d+4];
+      }
       
-   }//*/
-
+   }
+   
    // @sect4{EulerEquations::compute_normal_flux}
    
    // On the boundaries of the
@@ -2216,86 +2965,13 @@ struct MHDEquations
       // Dissipation flux
       
       for (unsigned int c=0; c<n_components; ++c)
-         normal_flux[c] += 0.5 * lambda  * (Wplus[c] - Wminus[c]);//*/
-	 
-      /*typedef typename InputVector::value_type number;
-
-      // Normal velocity
-      number vdotn_plus=0, vdotn_minus=0, bdotn_plus=0, bdotn_minus=0;
-      
-      for(unsigned int d=0; d<dim; ++d)
-      {
-         vdotn_plus  += Wplus[d]  * normal[d];
-         vdotn_minus += Wminus[d] * normal[d];
-	 bdotn_plus  += Wplus[magnetic_component+d]  * normal[d];
-         bdotn_minus += Wminus[magnetic_component+d] * normal[d];
-      }
-      
-      vdotn_plus  /= Wplus [density_component];
-      vdotn_minus /= Wminus[density_component];
-      
-      // pressure
-      number p_plus, p_minus, mp_plus, mp_minus;
-
-      p_plus  = compute_pressure<number> (Wplus);
-      mp_plus = compute_magnetic_pressure<number> (Wplus);
-      p_minus = compute_pressure<number> (Wminus);
-      mp_minus = compute_magnetic_pressure<number> (Wminus);
-      
-      // Maximum eigenvalue at cell face
-      number lambda_plus = max_eigenvalue_normal (Aplus, normal);
-      number lambda_minus = max_eigenvalue_normal (Aminus, normal);
-      number lambda = std::max(lambda_plus, lambda_minus);
-      if(isnan(lambda))
- 	std::cout<<"\n\t Lambda NaN";
-      
-      // Momentum flux
-      number normal_p[v_components];
-      for(unsigned int d=0;d<dim;d++)
-	normal_p[d] =normal[d];
-      normal_p[dim]=0;
-
-      for (unsigned int i=0; i<v_components; ++i)
-      {
-            normal_flux[i] = 0.5 * ( (p_plus+mp_plus)*normal_p[i] + Wplus[i]*vdotn_plus
-				- Wplus[magnetic_component+i]*bdotn_plus +
-				(p_minus+mp_minus) * normal_p[i] + Wminus[i]*vdotn_minus
-				- Wminus[magnetic_component+i]*bdotn_minus);
-      }
-      
-      // Magnetic flux
-      for (unsigned int i=0; i<v_components; ++i)
-      {
-	normal_flux[magnetic_component+i] = 0.5*(vdotn_plus * Wplus[magnetic_component+i] -
-					    Wplus[momentum_component+i] * bdotn_plus/Wplus[density_component] +
-					    vdotn_minus * Wminus[magnetic_component+i]) -
-					    Wminus[momentum_component+i] * bdotn_minus/Wminus[density_component];
-      }
-
-      // Density flux
-      normal_flux[density_component] = 0.5 * (Wplus [density_component] * vdotn_plus +
-                                              Wminus[density_component] * vdotn_minus);
-      
-      // Energy flux
-      number udotBplus = 0, udotBminus=0;
-      for (unsigned int i=0; i<v_components;++i)
-      {
-	udotBplus += Wplus[momentum_component+i] * Wplus[magnetic_component+i];
-	udotBminus += Wminus[momentum_component+i] * Wminus[magnetic_component+i];
-      }
-      udotBplus/=Wplus[density_component];
-      udotBminus/=Wminus[density_component];
-      
-      normal_flux[energy_component] = 0.5*(vdotn_plus*(Wplus[energy_component] + p_plus + mp_plus)
-                                      - bdotn_plus*udotBplus
-				      + vdotn_minus*(Wminus[energy_component] + p_minus + mp_minus)
-                                      - bdotn_minus*udotBminus);
-      
-      
-      // Dissipation flux
-      for (unsigned int c=0; c<n_components; ++c)
-         normal_flux[c] += 0.5 * lambda * (Wplus[c] - Wminus[c]);//*/
+         normal_flux[c] += 0.5 * lambda  * (Wplus[c] - Wminus[c]);
    }
+   
+   
+   // --------------------------------------------------------------------------
+   // Roe logaritmic average
+   // --------------------------------------------------------------------------
    
    template <typename Number>
    static Number logavg(Number left,
@@ -2317,19 +2993,15 @@ struct MHDEquations
      return roeaverage;
    }
    
+   // --------------------------------------------------------------------------
+   // z = R*q ... where q are the entropy variables
+   // --------------------------------------------------------------------------
    
-   /*template <typename InputVector>
-   static void computez(typename InputVector::value_type (&R)[n_components][n_components],
-			//const    InputVector              &prim,
-			typename InputVector::value_type (&prim)[n_components],
-			typename InputVector::value_type (&z)[n_components])//*/
    template <typename number>
    static void computez(number (&R)[n_components][n_components],
 			number (&prim)[n_components],
 			number (&z)[n_components])
    {
-     //typedef typename InputVector::value_type number;
-     //number p    = compute_pressure<number>(prim),
      number s    = log(prim[4]) - gas_gamma * log(prim[0]),
 	    beta = 0.5*prim[0]/prim[4],
 	    q2   = (prim[1]*prim[1] + prim[2]*prim[2] + prim[3]*prim[3]),
@@ -2354,7 +3026,6 @@ struct MHDEquations
      }
    
    }
-   
    
    // --------------------------------------------------------------------------
    // Entropy stable numerical flux by Chandrashekar and Klingenberg
@@ -2649,6 +3320,347 @@ struct MHDEquations
    Lambda[5] = abs(unorm+cf);
    Lambda[6] = abs(unorm-cs);
    Lambda[7] = abs(unorm+cs);
+
+   // Compute z
+   computez(R, left,  zl);
+   computez(R, right, zr);
+
+   for(unsigned int i=0; i<n_components; i++)
+      dz[i] = Lambda[i] * (zr[i] - zl[i]);
+   
+   for(unsigned int i=0; i<n_components; i++)
+   {
+      Diff = 0.0;
+      for(unsigned int j=0; j<n_components; j++)
+         Diff += R[i][j] * dz[j];
+      
+      flux[i] -= 0.5*Diff;
+   }
+   
+   normal_flux[0] = flux[1];
+   normal_flux[1] = flux[2];
+   normal_flux[2] = flux[3];
+   normal_flux[3] = flux[5];
+   normal_flux[4] = flux[6];
+   normal_flux[5] = flux[7];
+   normal_flux[6] = flux[0];
+   normal_flux[7] = flux[4];
+   
+   }
+   
+   // --------------------------------------------------------------------------
+   // Entropy stable numerical flux by Chandrashekar and Klingenberg
+   // using cell averages for the dissipation matrix
+   // --------------------------------------------------------------------------
+   template <typename InputVector>
+   static
+   void es_flux
+   (
+     const dealii::Tensor<1,dim> &normal,
+     const InputVector                &Wplus,
+     const InputVector                &Wminus,
+     const dealii::Vector<double>     &Aplus,
+     const dealii::Vector<double>     &Aminus,
+     typename InputVector::value_type (&normal_flux)[n_components]
+   )
+   {
+     typedef typename InputVector::value_type number;
+     
+     number left[n_components], right[n_components], flux[n_components];
+     number rho, u[v_components], ul2, ur2, q2, B1, B2, B3, Bl2, Br2, mB2;
+     number betal, betar, beta, rho_a, beta_a, p, bu1, bu2, bu3;
+     number a, srho, bb1, bb2, bb3, mbb2, cf2, cs2, cf, cs, alpf, alps;
+     number n1, n2, n3, np1, np2, np3, bet, alp, npn1, npn2, npn3, ff;
+     number bn, bnp, s1, s2, s3, sbn, t1, t2, t3;
+     number Kin, Jac[n_components][n_components], Rp[n_components][n_components],
+	    R[n_components][n_components], Lambda[n_components];
+     number Diff, zl[n_components], zr[n_components], dz[n_components];
+     number unorm, Bnorm, bunorm;
+     
+     number g_1 = gas_gamma-1, g1 = sqrt(g_1/gas_gamma), g2 = 1/sqrt(gas_gamma),
+	    g3 = g2/sqrt(2), g4=1/g_1;
+	    
+     left[0]=Wplus[6];
+     left[1]=Wplus[0]/Wplus[6];
+     left[2]=Wplus[1]/Wplus[6];
+     left[3]=Wplus[2]/Wplus[6];
+     left[4]=compute_pressure<number>(Wplus);
+     left[5]=Wplus[3];
+     left[6]=Wplus[4];
+     left[7]=Wplus[5];
+     
+     right[0]=Wminus[6];
+     right[1]=Wminus[0]/Wminus[6];
+     right[2]=Wminus[1]/Wminus[6];
+     right[3]=Wminus[2]/Wminus[6];
+     right[4]=compute_pressure<number>(Wminus);
+     right[5]=Wminus[3];
+     right[6]=Wminus[4];
+     right[7]=Wminus[5];
+     
+     rho = logavg (left[0], right[0]);
+     u[0]   = 0.5 * (left[1] + right[1]);
+     u[1]   = 0.5 * (left[2] + right[2]);
+     u[2]   = 0.5 * (left[3] + right[3]);
+     
+     unorm= u[0]*normal[0] + u[1]*normal[1];
+     
+     ul2 = left[1]*left[1] + left[2]*left[2] + left[3]*left[3];
+     ur2 = right[1]*right[1] + right[2]*right[2] + right[3]*right[3];
+     q2  = 0.5 * (ul2 + ur2);
+
+   B1   = 0.5 * (left[5] + right[5]);
+   B2   = 0.5 * (left[6] + right[6]);
+   B3   = 0.5 * (left[7] + right[7]);
+   Bnorm= B1*normal[0] + B2*normal[1];
+
+   Bl2 = left[5]*left[5] + left[6]*left[6] + left[7]*left[7];
+   Br2 = right[5]*right[5] + right[6]*right[6] + right[7]*right[7];
+   mB2  = 0.5*(Bl2 + Br2);
+   
+   betal = left[0]/(2.0*left[4]);
+   betar = right[0]/(2.0*right[4]);
+   beta  = logavg(betal, betar);
+   
+   rho_a = 0.5*(left[0]+right[0]);
+   beta_a = 0.5*(betal+betar);
+   p   = 0.5 * rho_a / beta_a;
+
+   bu1   = (betal*left[1] + betar*right[1])/(betal+betar);
+   bu2   = (betal*left[2] + betar*right[2])/(betal+betar);
+   bu3   = (betal*left[3] + betar*right[3])/(betal+betar);
+   bunorm= bu1*normal[0] + bu2*normal[1];
+   
+   flux[0] = rho * unorm;
+   flux[1] = (p + 0.5*mB2)*normal[0] + u[0] * flux[0] - Bnorm * B1;
+   flux[2] = (p + 0.5*mB2)*normal[1] + u[1] * flux[0] - Bnorm * B2;
+   flux[3] =                           u[2] * flux[0] - Bnorm * B3;
+   flux[5] = bunorm * B1 - bu1 * Bnorm;
+   flux[6] = bunorm * B2 - bu2 * Bnorm;
+   flux[7] = bunorm * B3 - bu3 * Bnorm;
+   flux[4] = 0.5*( 1/(g_1*beta) - q2) * flux[0]
+             + u[0] * flux[1] + u[1] * flux[2] + u[2] * flux[3]
+             + B1 * flux[5] + B2*flux[6] + B3 * flux[7]
+             - 0.5*unorm*mB2 + (u[0]*B1+u[1]*B2+u[2]*B3)*Bnorm;
+
+   // normal vector
+   n1 = normal[0];
+   n2 = normal[1];
+   n3 = 0.0;//*/
+
+   //---------------------------------------------------------------
+   // Add entropy dissipation using cell averages
+   number r=logavg(Aplus[density_component],Aminus[density_component]);
+   
+   number pml=compute_pressure<number>(Aplus);
+   number pmr=compute_pressure<number>(Aminus);
+   number pm  = logavg(pml, pmr);
+   
+   a = sqrt(gas_gamma*pm / r);
+   
+   number Bm1   = 0.5 * (Aplus[magnetic_component] + Aminus[magnetic_component]),
+	  Bm2   = 0.5 * (Aplus[magnetic_component+1] + Aminus[magnetic_component+1]),
+	  Bm3   = 0.5 * (Aplus[magnetic_component+2] + Aminus[magnetic_component+2]);
+   
+   srho = sqrt(r);
+   bb1 = Bm1/srho;
+   bb2 = Bm2/srho;
+   bb3 = Bm3/srho;
+   //----------------------------------------------------------------
+   mbb2 = bb1*bb1 + bb2*bb2 + bb3*bb3;
+   bn  = bb1*n1  + bb2*n2  + bb3*n3;
+   cf2 = 0.5*(a*a + mbb2) + 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
+   cs2 = 0.5*(a*a + mbb2) - 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
+   cf = sqrt(cf2);
+   cs = sqrt(abs(cs2)); // cs may be zero or close to zero
+   
+   alpf = sqrt( abs((a*a - cs2)/(cf2 - cs2)) );
+   alps = sqrt( abs((cf2 - a*a)/(cf2 - cs2)) );
+   
+   // vector nperp
+   ff = abs(mbb2 - bn*bn);
+   if(ff < 1.0e-10)
+   {
+      if(abs(normal[1]) < 1.0e-14)
+      {
+         np1 = 0.0;
+         np2 = 1.0/sqrt(2.0);
+         np3 = 1.0/sqrt(2.0);
+      }
+      else
+      {
+         np1 = 1.0/sqrt(2.0);
+         np2 = 0.0;
+         np3 = 1.0/sqrt(2.0);
+      }
+  }
+   else
+   {
+      bet = 1.0/sqrt(ff);
+      alp = - bet * bn;
+      np1 = alp*n1 + bet*bb1;
+      np2 = alp*n2 + bet*bb2;
+      np3 = alp*n3 + bet*bb3;
+   }
+   
+   // Primitive eigenvectors
+   
+   // entropy wave
+   Rp[0][0] = g1*srho;
+   Rp[1][0] = 0;
+   Rp[2][0] = 0;
+   Rp[3][0] = 0;
+   Rp[4][0] = 0;
+   Rp[5][0] = 0;
+   Rp[6][0] = 0;
+   Rp[7][0] = 0;
+   
+   // divergence wave
+   Rp[0][1] = 0;
+   Rp[1][1] = 0;
+   Rp[2][1] = 0;
+   Rp[3][1] = 0;
+   Rp[4][1] = 0;
+   Rp[5][1] = g2*a*n1;
+   Rp[6][1] = g2*a*n2;
+   Rp[7][1] = g2*a*n3;
+   
+   // alfven waves
+   // np x n
+   npn1 = np2*n3 - np3*n2;
+   npn2 = np3*n1 - np1*n3;
+   npn3 = np1*n2 - np2*n1;
+
+   Rp[0][2] = 0;
+   Rp[1][2] = g3*a*npn1/srho;
+   Rp[2][2] = g3*a*npn2/srho;
+   Rp[3][2] = g3*a*npn3/srho;
+   Rp[4][2] = 0;
+   Rp[5][2] = g3*a*npn1;
+   Rp[6][2] = g3*a*npn2;
+   Rp[7][2] = g3*a*npn3;
+
+   Rp[0][3] =  Rp[0][2];
+   Rp[1][3] = -Rp[1][2];
+   Rp[2][3] = -Rp[2][2];
+   Rp[3][3] = -Rp[3][2];
+   Rp[4][3] =  Rp[4][2];
+   Rp[5][3] =  Rp[5][2];
+   Rp[6][3] =  Rp[6][2];
+   Rp[7][3] =  Rp[7][2];
+
+   // fast magneto acoustic wave
+   bnp = bb1*np1 + bb2*np2 + bb3*np3;
+   s1  = (alpf*a*a*n1 + alps*a*(bnp*n1 - bn*np1))/(srho*cf);
+   s2  = (alpf*a*a*n2 + alps*a*(bnp*n2 - bn*np2))/(srho*cf);
+   s3  = (alpf*a*a*n3 + alps*a*(bnp*n3 - bn*np3))/(srho*cf);
+   
+   Rp[0][4] =  g3*alpf*srho;
+   Rp[1][4] = -g3*s1;
+   Rp[2][4] = -g3*s2;
+   Rp[3][4] = -g3*s3;
+   Rp[4][4] =  g3*alpf*srho*a*a;
+   Rp[5][4] =  g3*alps*a*np1;
+   Rp[6][4] =  g3*alps*a*np2;
+   Rp[7][4] =  g3*alps*a*np3;
+   
+   Rp[0][5] =  Rp[0][4];
+   Rp[1][5] = -Rp[1][4];
+   Rp[2][5] = -Rp[2][4];
+   Rp[3][5] = -Rp[3][4];
+   Rp[4][5] =  Rp[4][4];
+   Rp[5][5] =  Rp[5][4];
+   Rp[6][5] =  Rp[6][4];
+   Rp[7][5] =  Rp[7][4];
+   
+   // slow magneto acoustic waves
+   if(bn > 0)
+   {
+      sbn = +1.0;
+   }
+   else
+   {
+      sbn = -1.0;
+   }
+   t1 = sbn*(alps*a*bn*n1 + alpf*cf2*np1)/(srho*cf);
+   t2 = sbn*(alps*a*bn*n2 + alpf*cf2*np2)/(srho*cf);
+   t3 = sbn*(alps*a*bn*n3 + alpf*cf2*np3)/(srho*cf);
+   
+   Rp[0][6] =  g3*alps*srho;
+   Rp[1][6] = -g3*t1;
+   Rp[2][6] = -g3*t2;
+   Rp[3][6] = -g3*t3;
+   Rp[4][6] =  g3*alps*srho*a*a;
+   Rp[5][6] = -g3*alpf*a*np1;
+   Rp[6][6] = -g3*alpf*a*np2;
+   Rp[7][6] = -g3*alpf*a*np3;
+
+   Rp[0][7] =  Rp[0][6];
+   Rp[1][7] = -Rp[1][6];
+   Rp[2][7] = -Rp[2][6];
+   Rp[3][7] = -Rp[3][6];
+   Rp[4][7] =  Rp[4][6];
+   Rp[5][7] =  Rp[5][6];
+   Rp[6][7] =  Rp[6][6];
+   Rp[7][7] =  Rp[7][6];
+   
+   // Jacobian = d(con)/d(prim)
+   number um[v_components];
+   for(unsigned int i=0; i<v_components; i++)
+     um[i]=0.5*(Aplus[i]/Aplus[density_component]+Aminus[i]/Aminus[density_component]);
+   
+   Kin = 0.5*(um[0]*um[0] + um[1]*um[1] + um[2]*um[2]);
+
+   for(unsigned int i = 0; i < n_components; i++)
+   	for(unsigned int j = 0; j < n_components; j++)
+	   Jac[i][j]    = 0.0;
+
+   Jac[0][0] = 1.0;
+   Jac[1][0] = um[0];
+   Jac[2][0] = um[1];
+   Jac[3][0] = um[2];
+   Jac[4][0] = Kin;
+
+   Jac[1][1] = r;
+   Jac[4][1] = r*um[0];
+
+   Jac[2][2] = r;
+   Jac[4][2] = r*um[1];
+
+   Jac[3][3] = r;
+   Jac[4][3] = r*um[2];
+
+   Jac[4][4] = g4;
+
+   Jac[4][5] = Bm1;
+   Jac[4][6] = Bm2;
+   Jac[4][7] = Bm3;
+
+   Jac[5][5] = 1.0;
+   Jac[6][6] = 1.0;
+   Jac[7][7] = 1.0;
+
+   // Conserved eigenvectors: R = Jac * Rp
+   for(unsigned int i=0; i<n_components; i++)
+   {
+      for(unsigned int j=0; j<n_components; j++)
+      {
+         R[i][j] = 0.0;
+         for(unsigned int k=0; k<n_components; k++)
+            R[i][j] += Jac[i][k]*Rp[k][j];
+      }
+   }
+   
+   number umnorm= um[0]*normal[0] + um[1]*normal[1];
+   
+   Lambda[0] = abs(umnorm);
+   Lambda[1] = abs(umnorm);
+   Lambda[2] = abs(umnorm-bn);
+   Lambda[3] = abs(umnorm+bn);
+   Lambda[4] = abs(umnorm-cf);
+   Lambda[5] = abs(umnorm+cf);
+   Lambda[6] = abs(umnorm-cs);
+   Lambda[7] = abs(umnorm+cs);
 
    // Compute z
    computez(R, left,  zl);

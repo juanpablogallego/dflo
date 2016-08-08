@@ -47,6 +47,7 @@ void ConservationLaw<dim>::output_results ()
                              MHDEquations<dim>::component_interpretation ());
    
    data_out.add_data_vector (current_solution, postprocessor);
+   data_out.add_data_vector (shock_indicator, "shock_indicator");
    
    Vector<float> subdomain (triangulation.n_active_cells());
    for (unsigned int i=0; i<subdomain.size();++i)
@@ -82,26 +83,9 @@ void ConservationLaw<dim>::output_results ()
       all_files.push_back (filenames);
       std::ofstream visit_output ("master_file.visit");
       data_out.write_visit_record(visit_output, all_files);
+      
    }
-   
    ++output_file_number;
-   
-   // Write shock indicator
-//   DataOut<dim> shock;
-//   shock.attach_dof_handler (dh_cell);
-//   shock.add_data_vector (mu_shock, "mu_shock");
-//   shock.add_data_vector (shock_indicator, "shock_indicator");
-//   shock.build_patches (mapping());
-//   if(parameters.output_format == "vtk")     
-//   {
-//      std::ofstream shock_output ("shock.vtu");
-//      shock.write_vtu (shock_output);
-//   }
-//   else if(parameters.output_format == "tecplot") 
-//   {
-//      std::ofstream shock_output ("shock.plt");
-//      shock.write_tecplot (shock_output);
-//   }
    
    // Write cell average solution
 //   DataOut<dim> avg;

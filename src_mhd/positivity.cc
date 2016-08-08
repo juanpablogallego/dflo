@@ -20,9 +20,11 @@ void ConservationLaw<dim>::apply_positivity_limiter_cell
    (typename DoFHandler<dim>::active_cell_iterator& cell,
     PosLimData<dim>& data)
 {   
-   static const double gas_gamma = EulerEquations<dim>::gas_gamma;
-   static const unsigned int density_component = EulerEquations<dim>::density_component;
-   static const unsigned int energy_component  = EulerEquations<dim>::energy_component;
+   //int v_components = MHDEquations<dim>::v_components;
+   static const double gas_gamma = MHDEquations<dim>::gas_gamma;
+   static const unsigned int magnetic_component = MHDEquations<dim>::magnetic_component;
+   static const unsigned int density_component = MHDEquations<dim>::density_component;
+   static const unsigned int energy_component  = MHDEquations<dim>::energy_component;
    
    // Find mininimum density and pressure in the whole grid
    static const double eps = 1.0e-13;
@@ -35,13 +37,19 @@ void ConservationLaw<dim>::apply_positivity_limiter_cell
 
    std::vector<double>& density_values = data.density_values;
    std::vector<double>& energy_values = data.energy_values;
+   std::vector<double>& momentum_values_z = data.momentum_values_z;
+   std::vector<double>& magnetic_values_z = data.magnetic_values_z;
    std::vector< Tensor<1,dim> >& momentum_values = data.momentum_values;
+   std::vector< Tensor<1,dim> >& magnetic_values = data.magnetic_values;
    std::vector<unsigned int>& local_dof_indices = data.local_dof_indices;
    std::pair<unsigned int,unsigned int>& local_range = data.local_range;
    
    static const FEValuesExtractors::Scalar density (density_component);
    static const FEValuesExtractors::Scalar energy  (energy_component);
+   static const FEValuesExtractors::Vector magnetic(magnetic_component);
+   static const FEValuesExtractors::Scalar magnetic_z(magnetic_component+2);
    static const FEValuesExtractors::Vector momentum(0);
+   static const FEValuesExtractors::Scalar momentum_z(2);
    
    unsigned int c = cell_number(cell);
    fe_values_x.reinit(cell);
@@ -95,8 +103,14 @@ void ConservationLaw<dim>::apply_positivity_limiter_cell
    // now limit pressure
    double energy_average = cell_average[c][energy_component];
    Tensor<1,dim> momentum_average;
+   Tensor<1,dim> magnetic_average;
+   double momentum_average_z = cell_average[c][dim];
+   double magnetic_average_z = cell_average[c][magnetic_component+dim];
    for(unsigned int i=0; i<dim; ++i)
+   {
       momentum_average[i] = cell_average[c][i];
+      magnetic_average[i] = cell_average[c][magnetic_component+i];
+   }
    
    double theta2 = 1.0;
    for(unsigned int d=0; d<dim; ++d)
@@ -105,30 +119,46 @@ void ConservationLaw<dim>::apply_positivity_limiter_cell
       {
          fe_values_x[density].get_function_values(current_solution, density_values);
          fe_values_x[momentum].get_function_values(current_solution, momentum_values);
+         fe_values_x[momentum_z].get_function_values(current_solution, momentum_values_z);
          fe_values_x[energy].get_function_values(current_solution, energy_values);
+	 fe_values_x[magnetic].get_function_values(current_solution, magnetic_values);
+	 fe_values_x[magnetic_z].get_function_values(current_solution, magnetic_values_z);
       }
       else
       {
          fe_values_y[density].get_function_values(current_solution, density_values);
          fe_values_y[momentum].get_function_values(current_solution, momentum_values);
+         fe_values_y[momentum_z].get_function_values(current_solution, momentum_values_z);
          fe_values_y[energy].get_function_values(current_solution, energy_values);
+         fe_values_y[magnetic].get_function_values(current_solution, magnetic_values);
+	 fe_values_y[magnetic_z].get_function_values(current_solution, magnetic_values_z);
       }
       
       for(unsigned int q=0; q<n_q_points; ++q)
       {
-         double pressure = (gas_gamma-1.0)*(energy_values[q] -
-                                            0.5*momentum_values[q].norm_square()/density_values[q]);
+         double pressure = (gas_gamma-1.0)*(energy_values[q] 
+					    -0.5*(momentum_values[q][0]*momentum_values[q][0]
+                                                          + momentum_values[q][1]*momentum_values[q][1]
+							  + momentum_values_z[q]*momentum_values_z[q])/density_values[q]
+                                            -0.5*(magnetic_values[q][0]*magnetic_values[q][0]
+					                  + magnetic_values[q][1]*magnetic_values[q][1]
+					                  + magnetic_values_z[q]*magnetic_values_z[q]));
          if(pressure < eps)
          {
             double drho = density_values[q] - density_average;
             Tensor<1,dim> dm = momentum_values[q] - momentum_average;
-            double dE = energy_values[q] - energy_average;
-            double a1 = 2.0*drho*dE - dm*dm;
+	    Tensor<1,dim> dB = magnetic_values[q] - magnetic_average;
+            double dmz = momentum_values_z[q] - momentum_average_z;
+	    double dBz = magnetic_values_z[q] - magnetic_average_z;
+	    double dE = energy_values[q] - energy_average;
+            double a1 = 2.0*drho*dE - (dm*dm+dmz*dmz);
             double b1 = 2.0*drho*(energy_average - eps/(gas_gamma-1.0))
                         + 2.0*density_average*dE
-                        - 2.0*momentum_average*dm;
+                        - 2.0*(momentum_average*dm+momentum_average_z*dmz)
+                        - magnetic_average*magnetic_average*drho+magnetic_average_z*magnetic_average_z*drho;
             double c1 = 2.0*density_average*energy_average
-                        - momentum_average*momentum_average
+                        - (momentum_average*momentum_average+momentum_average_z*momentum_average_z)
+                        - density_average*(magnetic_average*magnetic_average+magnetic_average_z*magnetic_average_z)
                         - 2.0*eps*density_average/(gas_gamma-1.0);
             // Divide by a1 to avoid round-off error
             b1 /= a1; c1 /= a1;
