@@ -146,7 +146,7 @@ template <int dim>
 void Orszag_Tang_vortex<dim>::vector_value (const Point<dim> &p,
                                       Vector<double>   &values) const
 {
-   const double gamma = MHDEquations<dim>::gas_gamma;
+   const double gas_gamma = MHDEquations<dim>::gas_gamma;
    double sqpi4 = 1/std::sqrt(4*M_PI);
    double rho = 25/(36*M_PI),
           pre = 5/(12*M_PI),
@@ -164,7 +164,7 @@ void Orszag_Tang_vortex<dim>::vector_value (const Point<dim> &p,
    values[MHDEquations<dim>::magnetic_component+1] = by;
    values[MHDEquations<dim>::magnetic_component+2] = bz;
    values[MHDEquations<dim>::density_component]    = rho;
-   values[MHDEquations<dim>::energy_component]     = pre/(gamma-1)
+   values[MHDEquations<dim>::energy_component]     = pre/(gas_gamma-1)
 						     + 0.5 * rho * (vex*vex + vey*vey + vez*vez)
 						     + 0.5 * (bx*bx + by*by + bz*bz);
 }
