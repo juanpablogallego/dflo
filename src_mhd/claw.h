@@ -63,7 +63,8 @@ struct PosLimData
    dealii::FEValues<dim> fe_values_x;
    dealii::FEValues<dim> fe_values_y;
 
-   std::vector<double> density_values, energy_values;
+   std::vector<double> density_values, energy_values, momentum_values_z, magnetic_values_z;
+   
    std::vector< Tensor<1,dim> > momentum_values, magnetic_values;
 
    std::vector<unsigned int> local_dof_indices;
@@ -85,6 +86,8 @@ PosLimData<dim>::PosLimData(const dealii::FESystem<dim>    &fe,
    energy_values (n_q_points),
    magnetic_values (n_q_points),
    momentum_values (n_q_points),
+   magnetic_values_z (n_q_points),
+   momentum_values_z (n_q_points),
    local_dof_indices (fe.dofs_per_cell),
    local_range (local_range)
 {
@@ -339,6 +342,8 @@ private:
             MHDEquations<dim>::es_flux (normal,
 					Wplus,
 					Wminus,
+					Aplus,
+					Aminus,
 					normal_flux);
             break;
 
