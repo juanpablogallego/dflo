@@ -2329,7 +2329,7 @@ struct MHDEquations
    
    
    //------------------------------------------------------------------------------
-   // Eigensystem from Fengyan Li
+   // Eigensystem from F. Li
    //------------------------------------------------------------------------------
    static
    void compute_Rx_Lx (const dealii::Vector<double> &W,
