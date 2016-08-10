@@ -1749,7 +1749,7 @@ struct MHDEquations
       b_2 /= (*(W.begin()+density_component));
 
       number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
-      number radical2 =  abs(0.5*(a_2 + b_2 - std::sqrt(radical1)));
+      number radical2 =  0.5*(a_2 + b_2 - std::sqrt(radical1));
       number C_s = std::sqrt(radical2);
       /*if(isnan(C_s))
 	std::cout<<"\n\t The Slow speed is NaN. r1="<<radical1<<", r2="<<radical2<<", C_a="<<C_a
@@ -3670,12 +3670,12 @@ struct MHDEquations
    
    Lambda[0] = abs(umnorm);
    Lambda[1] = abs(umnorm);
-   Lambda[2] = abs(abs(umnorm)-abs(bn));
-   Lambda[3] = abs(umnorm)+abs(bn);
-   Lambda[4] = abs(abs(umnorm)-abs(cf));
-   Lambda[5] = abs(umnorm)+abs(cf);
-   Lambda[6] = abs(abs(umnorm)-abs(cs));
-   Lambda[7] = abs(umnorm)+abs(cs);//*/
+   Lambda[2] = abs(umnorm-bn);
+   Lambda[3] = abs(umnorm+bn);
+   Lambda[4] = abs(umnorm-cf);
+   Lambda[5] = abs(umnorm+cf);
+   Lambda[6] = abs(umnorm-cs);
+   Lambda[7] = abs(umnorm+cs);
    
    // Rusanov flux
    /*number Lambda_max=std::max(abs(unorm)+abs(bn),abs(unorm)+abs(cf));
