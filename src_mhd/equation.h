@@ -1749,7 +1749,7 @@ struct MHDEquations
       b_2 /= (*(W.begin()+density_component));
 
       number radical1 = (a_2+b_2)*(a_2+b_2) - 4*a_2*C_a*C_a;
-      number radical2 =  0.5*(a_2 + b_2 - std::sqrt(radical1));
+      number radical2 =  abs(0.5*(a_2 + b_2 - std::sqrt(radical1)));
       number C_s = std::sqrt(radical2);
       /*if(isnan(C_s))
 	std::cout<<"\n\t The Slow speed is NaN. r1="<<radical1<<", r2="<<radical2<<", C_a="<<C_a
@@ -1931,14 +1931,29 @@ struct MHDEquations
      const number pressure = compute_pressure<number> (W);
      const number m_pressure = compute_magnetic_pressure<number>(W);
      
-     const number sonic = std::sqrt((gas_gamma * pressure + 2*m_pressure) / (*(W.begin()+density_component)));
+     number a2, b2, bn, cf, cs, radical;
+     
+     a2 = (gas_gamma * pressure + 2*m_pressure) / (*(W.begin()+density_component));
+     b2 = (W[magnetic_component]*W[magnetic_component] + 
+          W[magnetic_component+1]*W[magnetic_component+1] + 
+          W[magnetic_component+2]*W[magnetic_component+2])/W[density_component];
+     bn = abs(W[magnetic_component]*normal[0]+W[magnetic_component+1]*normal[1])/sqrt(W[density_component]);
+     
+     radical = sqrt(abs((a2*a2+b2*b2)*(a2*a2+b2*b2) - 4*a2*bn*bn));
+     
+     cf = sqrt(0.5*(a2 + b2 + radical));
+     
+     cs = sqrt(abs(0.5*(a2 + b2 - radical)));
+     
+     number max_eigen = std::max(cf,cs);
+     max_eigen = std::max(max_eigen, bn);
      
      number velocity = 0;
      for (unsigned int d=0; d<dim; ++d)
        velocity += *(W.begin()+d) * normal[d];
      
      velocity /=  (*(W.begin()+density_component));
-     return std::fabs(velocity) + sonic;
+     return std::fabs(velocity) + max_eigen;
       
    }
    
@@ -3655,12 +3670,17 @@ struct MHDEquations
    
    Lambda[0] = abs(umnorm);
    Lambda[1] = abs(umnorm);
-   Lambda[2] = abs(umnorm-bn);
-   Lambda[3] = abs(umnorm+bn);
-   Lambda[4] = abs(umnorm-cf);
-   Lambda[5] = abs(umnorm+cf);
-   Lambda[6] = abs(umnorm-cs);
-   Lambda[7] = abs(umnorm+cs);
+   Lambda[2] = abs(abs(umnorm)-abs(bn));
+   Lambda[3] = abs(umnorm)+abs(bn);
+   Lambda[4] = abs(abs(umnorm)-abs(cf));
+   Lambda[5] = abs(umnorm)+abs(cf);
+   Lambda[6] = abs(abs(umnorm)-abs(cs));
+   Lambda[7] = abs(umnorm)+abs(cs);//*/
+   
+   // Rusanov flux
+   /*number Lambda_max=std::max(abs(unorm)+abs(bn),abs(unorm)+abs(cf));
+   Lambda_max=std::max(Lambda_max, abs(unorm)+abs(cs));
+   Lambda[0]=Lambda[1]=Lambda[2]=Lambda[3]=Lambda[4]=Lambda[5]=Lambda[6]=Lambda[7]=Lambda_max;//*/
 
    // Compute z
    computez(R, left,  zl);
