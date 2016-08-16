@@ -445,13 +445,13 @@ void ConservationLaw<dim>::apply_limiter_minmax_Qk ()
          // Transform to characteristic variables
          typedef double EigMatrix[n_components][n_components];
          EigMatrix R, L;
-         if(parameters.char_lim)
+/*         if(parameters.char_lim)
          {
             MHDEquations<dim>::compute_eigen_matrix (cell_average[c], R, L);
             MHDEquations<dim>::transform_to_char (L, avg_cell);
             avg_min = avg_cell;
             avg_max = avg_cell;
-         }
+         }//*/
 
          for (unsigned int face_no=0; face_no<GeometryInfo<dim>::faces_per_cell; ++face_no)
             if (! cell->at_boundary(face_no))
