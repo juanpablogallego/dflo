@@ -102,6 +102,8 @@ public:
    AlfvenWaves () : dealii::Function<dim>(MHDEquations<dim>::n_components){}
    virtual void vector_value (const dealii::Point<dim>  &p,
                               dealii::Vector<double>  &values) const;
+   double value(const Point<dim> &p,
+                const unsigned int component=6) const;
 };
 
 //------------------------------------------------------------------------

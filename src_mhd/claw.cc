@@ -966,6 +966,22 @@ void ConservationLaw<dim>::run ()
    computing_timer.print_summary ();
    computing_timer.reset ();
    pcout << std::endl;
+   
+   if(parameters.ic_function == "alfven")
+   {
+     AlfvenWaves<dim> alfven_solution;
+     Vector<float> local_errors (triangulation.n_active_cells());
+     VectorTools::integrate_difference (dof_handler,
+					current_solution,
+					alfven_solution,
+					local_errors,
+					QGauss<dim>(2*(fe.degree+1)),
+					VectorTools::L2_norm);
+     const double total_local_error = local_errors.l2_norm();
+     const double total_global_error = std::sqrt (Utilities::MPI::sum (total_local_error * total_local_error, MPI_COMM_WORLD));
+     
+     pcout<<"\n \t L2 error : \t"<<total_global_error;
+   }
 }
 
 template class ConservationLaw<2>;

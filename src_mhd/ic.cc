@@ -139,6 +139,59 @@ void AlfvenWaves<dim>::vector_value (const Point<dim> &p,
 }
 
 //--------------------------------------------------------------------------------------------
+// Initial condition for Polarized Alfven  waves.
+// This is setup for 2-d case only
+//--------------------------------------------------------------------------------------------
+template <int dim>
+double AlfvenWaves<dim>::value (const Point<dim> &p,
+                                const unsigned int component) const
+{
+   double theta = std::atan(0.5);
+   const double gamma = MHDEquations<dim>::gas_gamma;
+   double a_2pix1 = 2*M_PI*(p[0]*std::cos(theta) + p[1]*std::sin(theta));
+   // Parallel (p) and Orthogonal (o) Variables
+   double Bp=1.0,
+	  Bo=0.1*std::sin(a_2pix1),
+	  Vp=0.0,
+	  Vo=0.1*std::sin(a_2pix1);
+   // Cartesian coordinates
+   double rho = 1.0, pre = 0.1,
+	  vex = Vp*std::cos(theta) - Vo*std::sin(theta),
+	  vey = Vp*std::sin(theta) + Vo*std::cos(theta),
+	  vez = 0.1*std::cos(a_2pix1),
+	  bx  = Bp*std::cos(theta) - Bo*std::sin(theta),
+	  by  = Bp*std::sin(theta) + Bo*std::cos(theta),
+	  bz  = 0.1*std::cos(a_2pix1);
+   switch(component)
+   {
+     case 0:
+       return rho * vex;
+       break;
+     case 1:
+       return rho * vey;
+       break;
+     case 2:
+       return rho * vez;
+       break;
+     case 3:
+       return bx;
+       break;
+     case 4:
+       return by;
+       break;
+     case 5:
+       return bz;
+       break;
+     case 6:
+       return rho;
+       break;
+     case 7:
+       return pre/(gamma-1.0) + 0.5 * rho * (vex*vex + vey*vey + vez*vez) + 0.5 * (bx*bx + by*by + bz*bz);
+       break;
+   }
+}
+
+//--------------------------------------------------------------------------------------------
 // Initial condition for the Orszag-Tang vortex.
 // This is setup for 2-d case only
 //--------------------------------------------------------------------------------------------
