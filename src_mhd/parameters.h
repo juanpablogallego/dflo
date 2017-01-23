@@ -267,6 +267,7 @@ namespace Parameters
    struct Output
    {
       bool schlieren_plot;
+      bool mach_plot;
       double output_time_step;
       int output_iter_step;
       std::string output_format;

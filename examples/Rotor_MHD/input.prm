@@ -71,7 +71,8 @@ end
 subsection output
   set iter step      = 50
   set schlieren plot = true
-  set format         = vtk #tecplot
+  set mach plot = true
+set format         = vtk #tecplot
 #  set compute angular momentum = 1
 end
 

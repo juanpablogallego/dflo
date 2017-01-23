@@ -1568,6 +1568,7 @@ struct EulerEquations
       
    private:
       const bool do_schlieren_plot;
+//       const bool do_mach_plot;
    };
 };
 
@@ -2075,8 +2076,6 @@ struct MHDEquations
    // Left and right eigenvector matrices
    // Lx, Rx = along x direction
    // Ly, Ry = along y direction
-   // Expressions taken from
-   // http://people.nas.nasa.gov/~pulliam/Classes/New_notes/euler_notes.pdf
    // Note: This is implemented only for 2-D
    //---------------------------------------------------------------------------
     //------------------------------------------------------------------------------
@@ -2529,8 +2528,6 @@ struct MHDEquations
    // Left and right eigenvector matrices
    // MLx, MRx = along x direction
    // MLy, MRy = along y direction
-   // Expressions taken from
-   // http://people.nas.nasa.gov/~pulliam/Classes/New_notes/euler_notes.pdf
    // Note: This is implemented only for 2-D
    //---------------------------------------------------------------------------
    static
@@ -3907,7 +3904,7 @@ struct MHDEquations
    class Postprocessor : public dealii::DataPostprocessor<dim>
    {
    public:
-      Postprocessor (const bool do_schlieren_plot);
+      Postprocessor (const bool do_schlieren_plot, const bool do_mach_plot);
       
       virtual
       void
@@ -3931,6 +3928,7 @@ struct MHDEquations
       
    private:
       const bool do_schlieren_plot;
+      const bool do_mach_plot;
    };
 };
 

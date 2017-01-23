@@ -189,9 +189,10 @@ const double MHDEquations<dim>::gas_gamma = 5.0/3.0;
 
 template <int dim>
 MHDEquations<dim>::Postprocessor::
-Postprocessor (const bool do_schlieren_plot)
+Postprocessor (const bool do_schlieren_plot, const bool do_mach_plot)
 		:
-		do_schlieren_plot (do_schlieren_plot)
+		do_schlieren_plot (do_schlieren_plot),
+		do_mach_plot(do_mach_plot)
 {}
 
 template <int dim>
@@ -235,6 +236,14 @@ compute_derived_quantities_vector (const std::vector<Vector<double> >           
       if (do_schlieren_plot == true)
          computed_quantities[q](dim+2) = duh[q][density_component] *
                                          duh[q][density_component];
+      if (do_mach_plot == true)
+      {
+	computed_quantities[q](dim+3)=0;
+	double cs=sqrt(gas_gamma * computed_quantities[q](dim) / uh[q](density_component));
+	for(unsigned int d=0; d<dim; ++d)
+         computed_quantities[q](dim+3) += computed_quantities[q](d)*computed_quantities[q](d);
+	computed_quantities[q](dim+3)/=cs;
+      }
    }
 }
 
@@ -256,7 +265,9 @@ MHDEquations<dim>::Postprocessor::get_names () const
 
   if (do_schlieren_plot == true)
     names.push_back ("schlieren_plot");
-
+  if (do_mach_plot == true)
+    names.push_back ("mach_plot");
+  
   return names;
 }
 
@@ -300,10 +311,15 @@ template <int dim>
 unsigned int
 MHDEquations<dim>::Postprocessor::n_output_variables () const
 {
+  int num_var=dim+2;
   if (do_schlieren_plot == true)
-    return dim+3;
-  else
-    return dim+2;
+    num_var+=1;
+//     return dim+3;
+//   else
+//     return dim+2;
+  if (do_mach_plot == true)
+    num_var+=1;
+  return num_var;
 }
 
 

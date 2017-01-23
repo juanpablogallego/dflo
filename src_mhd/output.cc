@@ -36,7 +36,7 @@ void ConservationLaw<dim>::output_results ()
    TimerOutput::Scope t(computing_timer, "Output");
 
    typename MHDEquations<dim>::Postprocessor
-   postprocessor (parameters.schlieren_plot);
+   postprocessor (parameters.schlieren_plot, parameters.mach_plot);
    
    DataOut<dim> data_out;
    data_out.attach_dof_handler (dof_handler);
