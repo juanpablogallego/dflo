@@ -231,7 +231,7 @@ void Rotor_MHD<dim>::vector_value (const Point<dim> &p,
                                       Vector<double>   &values) const
 {
    const double gas_gamma = MHDEquations<dim>::gas_gamma;
-   double r0=0.1, r1= 0.115, r=sqrt(p[0]*p[0]+p[1]*p[1]),
+   double r0=0.1, r1= 0.115, r=sqrt((p[0]-0.5)*(p[0]-0.5)+(p[1]-0.5)*(p[1]-0.5)),
 	  u0=2, vex=0, vey=0, vez=0, bx=5/(4*M_PI), by=0, bz=0,
 	  pre=1, rho=1;
    if(r<r0)
