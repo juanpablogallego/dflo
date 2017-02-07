@@ -226,23 +226,29 @@ compute_derived_quantities_vector (const std::vector<Vector<double> >           
    for (unsigned int q=0; q<n_quadrature_points; ++q)
    {
       const double density = uh[q](density_component);
+      const double pressure = compute_pressure<double> (uh[q]);;
       
       for (unsigned int d=0; d<dim; ++d)
          computed_quantities[q](d) = uh[q](d) / density;
       
-      computed_quantities[q](dim) = compute_pressure<double> (uh[q]);
+      computed_quantities[q](dim) = pressure;
       computed_quantities[q](dim+1) = duh[q][magnetic_component][0] +
                                       duh[q][magnetic_component+1][1];
+      int adds = 1;
       if (do_schlieren_plot == true)
-         computed_quantities[q](dim+2) = duh[q][density_component] *
+      {
+	adds+=1;
+        computed_quantities[q](dim+adds) = duh[q][density_component] *
                                          duh[q][density_component];
+      }
       if (do_mach_plot == true)
       {
-	computed_quantities[q](dim+3)=0;
-	double cs=sqrt(gas_gamma * computed_quantities[q](dim) / uh[q](density_component));
-	for(unsigned int d=0; d<dim; ++d)
-         computed_quantities[q](dim+3) += computed_quantities[q](d)*computed_quantities[q](d);
-	computed_quantities[q](dim+3)/=cs;
+	adds+=1;
+	computed_quantities[q](dim+adds)=0;
+	const double cs=gas_gamma*pressure/density;
+	for(unsigned int d=0; d<2; ++d)
+         computed_quantities[q](dim+adds) += computed_quantities[q](d)*computed_quantities[q](d);
+	computed_quantities[q](dim+adds)=sqrt(computed_quantities[q](dim+adds)/cs);
       }
    }
 }
@@ -287,6 +293,9 @@ MHDEquations<dim>::Postprocessor::get_data_component_interpretation () const
 			    component_is_scalar);
 
   if (do_schlieren_plot == true)
+    interpretation.push_back (DataComponentInterpretation::
+			      component_is_scalar);
+  if (do_mach_plot == true)
     interpretation.push_back (DataComponentInterpretation::
 			      component_is_scalar);
 
