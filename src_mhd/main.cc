@@ -6,10 +6,10 @@
 
 using namespace dealii;
 
-void handler(int sig) {
-  std::printf("Floating Point Exception\n");
-  exit(0);
-}
+// void handler(int sig) {
+//   std::printf("Floating Point Exception\n");
+//   exit(0);
+// }
 
 // @sect3{main()}
 // The following ``main'' function is
@@ -21,8 +21,8 @@ void handler(int sig) {
 int main (int argc, char *argv[])
 {
   
-   feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
-   signal(SIGFPE, handler);
+//    feenableexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
+//    signal(SIGFPE, handler);
   
    deallog.depth_console(0);
    if (argc != 2 && argc != 3)

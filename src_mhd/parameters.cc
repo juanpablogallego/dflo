@@ -284,7 +284,10 @@ namespace Parameters
          prm.declare_entry("schlieren plot", "false",
                            Patterns::Bool (),
                            "Whether or not to produce schlieren plots");
-         prm.declare_entry("time step", "1e20",
+         prm.declare_entry("mach plot", "false",
+                           Patterns::Bool (),
+                           "Whether or not to produce a mach plot");
+	 prm.declare_entry("time step", "1e20",
                            Patterns::Double(),
                            "Output once per this time period");
          prm.declare_entry("iter step", "1000000",
@@ -307,6 +310,7 @@ namespace Parameters
       prm.enter_subsection("output");
       {
          schlieren_plot = prm.get_bool("schlieren plot");
+	 mach_plot = prm.get_bool("mach plot");
          output_time_step = prm.get_double("time step");
          output_iter_step = prm.get_double("iter step");
          output_format = prm.get("format");
@@ -432,7 +436,7 @@ namespace Parameters
       prm.enter_subsection("initial condition");
       {
          prm.declare_entry("function", "none",
-                           Patterns::Selection("none|rt|isenvort|vortsys|alfven|orszag"),
+                           Patterns::Selection("none|rt|isenvort|vortsys|alfven|orszag|rotormhd|rshtube"),
                            "function for initial condition");
          
          for (unsigned int di=0; di<MHDEquations<dim>::n_components; ++di)

@@ -1568,6 +1568,7 @@ struct EulerEquations
       
    private:
       const bool do_schlieren_plot;
+//       const bool do_mach_plot;
    };
 };
 
@@ -1931,29 +1932,14 @@ struct MHDEquations
      const number pressure = compute_pressure<number> (W);
      const number m_pressure = compute_magnetic_pressure<number>(W);
      
-     number a2, b2, bn, cf, cs, radical;
-     
-     a2 = (gas_gamma * pressure + 2*m_pressure) / (*(W.begin()+density_component));
-     b2 = (W[magnetic_component]*W[magnetic_component] + 
-          W[magnetic_component+1]*W[magnetic_component+1] + 
-          W[magnetic_component+2]*W[magnetic_component+2])/W[density_component];
-     bn = abs(W[magnetic_component]*normal[0]+W[magnetic_component+1]*normal[1])/sqrt(W[density_component]);
-     
-     radical = sqrt(abs((a2*a2+b2*b2)*(a2*a2+b2*b2) - 4*a2*bn*bn));
-     
-     cf = sqrt(0.5*(a2 + b2 + radical));
-     
-     cs = sqrt(abs(0.5*(a2 + b2 - radical)));
-     
-     number max_eigen = std::max(cf,cs);
-     max_eigen = std::max(max_eigen, bn);
+     const number sonic = std::sqrt((gas_gamma * pressure + 2*m_pressure) / (*(W.begin()+density_component)));
      
      number velocity = 0;
      for (unsigned int d=0; d<dim; ++d)
        velocity += *(W.begin()+d) * normal[d];
      
      velocity /=  (*(W.begin()+density_component));
-     return std::fabs(velocity) + max_eigen;
+     return std::fabs(velocity) + sonic;
       
    }
    
@@ -2056,7 +2042,6 @@ struct MHDEquations
        
        // Powell terms for the momentum components
        flux[momentum_component + i] = W[magnetic_component + i];
-       //flux[momentum_component + i] = 0;
        // Powell terms for the magnetic components
        flux[magnetic_component + i] = velocity;
        // Powell terms for the energy component
@@ -2087,263 +2072,13 @@ struct MHDEquations
          flux[d] = pressure * normal[d] + W[d] * vdotn;
    }//*/
    
-   
    //---------------------------------------------------------------------------
-   // Compute R matrix for transformation into characteristic variables
+   // Left and right eigenvector matrices
+   // Lx, Rx = along x direction
+   // Ly, Ry = along y direction
+   // Note: This is implemented only for 2-D
    //---------------------------------------------------------------------------
-   
-   static
-   void Compute_R(const dealii::Vector<double> &W,
-		  double (&R)[n_components][n_components],
-		  double (&n)[v_components]
-		 )
-   {
-     // compute needed values
-     double r = W[density_component];
-     double g = gas_gamma, g_1 = g-1, r_1=1/r, r_2=1/std::sqrt(r);
-     
-     double p = compute_pressure<double>(W);
-     double c = std::sqrt(g*p/r);
-     
-     double u[v_components], u2 = 0, un = 0;
-     double b[v_components], bb[v_components], b2 = 0, bb2 = 0, bn = 0;
-     
-     for(unsigned int i=0; i<v_components; i++)
-     {
-       u[i]=W[i]*r_1;
-       b[i]=W[magnetic_component+i];
-       
-       u2  += u[i]*u[i];
-       un  += u[i]*n[i];
-       b2  += b[i]*b[i];
-       bb[i]= W[magnetic_component+i]*r_2;
-       bb2 += bb[i]*bb[i];
-       bn  += bb[i]*n[i];
-     }
-     
-     // Compute eigenvector matrix R
-     R[0][0]=0; R[0][1]=0;
-     R[1][0]=0; R[1][1]=0;
-     R[2][0]=0; R[2][1]=0;
-     R[3][0]=0; R[3][1]=0;
-     R[4][0]=1; R[4][1]=0;
-     R[5][0]=0; R[5][1]=n[0];
-     R[6][0]=0; R[6][1]=n[1];
-     R[7][0]=0; R[7][1]=n[2];
-     
-     double np[v_components];
-     /*double ff = abs(bb2 - bn*bn), bet, alp;
-     if(ff < 1.0e-10)
-     {
-       if(abs(n[1]) < 1.0e-14)
-       {
-	 np[0] = 0.0;
-	 np[1] = 1.0/sqrt(2.0);
-	 np[2] = 1.0/sqrt(2.0);
-       }
-       else
-       {
-         np[0] = 1.0/sqrt(2.0);
-         np[1] = 0.0;
-         np[2] = 1.0/sqrt(2.0);
-      }
-   }
-   else
-   {
-      bet = 1.0/sqrt(ff);
-      alp = - bet * bn;
-      np[0] = alp*n[0] + bet*bb[0];
-      np[1] = alp*n[1] + bet*bb[1];
-      np[2] = alp*n[2] + bet*bb[2];
-   }//*/
-     
-     double alp = std::sqrt(bb2-bn*bn);
-     np[0]=n[1]*b[2]-n[2]*b[1];
-     np[1]=n[2]*b[0]-n[0]*b[2];
-     np[2]=n[0]*b[1]-n[1]*b[0];
-     
-     // l is in fact np
-     R[0][2] = 0;
-     R[1][2] = np[0];
-     R[2][2] = np[1];
-     R[3][2] = np[2];
-     R[4][2] = 0;
-     R[5][2] = -np[0];
-     R[6][2] = -np[1];
-     R[7][2] = -np[2];
-     
-     R[0][3] = 0;
-     R[1][3] = np[0];
-     R[2][3] = np[1];
-     R[3][3] = np[2];
-     R[4][3] = 0;
-     R[5][3] = np[0];
-     R[6][3] = np[1];
-     R[7][3] = np[2];
-     
-     double a = sqrt(g*p*r_1);
-     double cf2 = 0.5*(a*a + bb2) + 0.5*sqrt( (a*a+bb2)*(a*a+bb2) - 4.0*a*a*bn*bn);
-     double cs2 = 0.5*(a*a + bb2) - 0.5*sqrt( (a*a+bb2)*(a*a+bb2) - 4.0*a*a*bn*bn);
-     double cf = sqrt(cf2);
-     double cs = sqrt(abs(cs2)); // cs may be zero or close to zero
-     
-     //double alpf = sqrt( abs((a*a - cs2)/(cf2 - cs2)) );
-     //double alps = sqrt( abs((cf2 - a*a)/(cf2 - cs2)) );
-     
-     double alpf2 = c*c, alps2 = c*c;
-     
-     double Bp[v_components];
-     double lf[v_components], ls[v_components], mf[v_components], ms[v_components];
-     for(unsigned int i=0; i<v_components; i++)
-     {
-       Bp[i]=bb[i]-bn*n[i];
-       
-       lf[i] = cf*(n[i]-Bp[i]*bn/(cf2-bn*bn));
-       ls[i] = cs*(n[i]-Bp[i]*bn/(cs2-bn*bn));
-       mf[i] = cf2*(Bp[i]/(cf2-bn*bn));
-       ms[i] = cs2*(Bp[i]/(cs2-bn*bn));
-       
-       alpf2 += lf[i]*lf[i] + mf[i]*mf[i];
-       alps2 += ls[i]*ls[i] + ms[i]*ms[i];
-     }
-     
-     double alpf = 1/std::sqrt(alpf2);
-     double alps = 1/std::sqrt(alps2);
-     
-     R[0][4] = alpf*c;
-     R[1][4] = alpf*lf[0];
-     R[2][4] = alpf*lf[1];
-     R[3][4] = alpf*lf[2];
-     R[4][4] = 0;
-     R[5][4] = alpf*mf[0];
-     R[6][4] = alpf*mf[1];
-     R[7][4] = alpf*mf[2];
-     
-     R[0][5] =-alpf*c;
-     R[1][5] = alpf*lf[0];
-     R[2][5] = alpf*lf[1];
-     R[3][5] = alpf*lf[2];
-     R[4][5] = 0;
-     R[5][5] =-alpf*mf[0];
-     R[6][5] =-alpf*mf[1];
-     R[7][5] =-alpf*mf[2];
-     
-     R[0][6] = alps*c;
-     R[1][6] = alps*ls[0];
-     R[2][6] = alps*ls[1];
-     R[3][6] = alps*ls[2];
-     R[4][6] = 0;
-     R[5][6] = alps*ms[0];
-     R[6][6] = alps*ms[1];
-     R[7][6] = alps*ms[2];
-     
-     R[0][7] =-alps*c;
-     R[1][7] = alps*ls[0];
-     R[2][7] = alps*ls[1];
-     R[3][7] = alps*ls[2];
-     R[4][7] = 0;
-     R[5][7] =-alps*ms[0];
-     R[6][7] =-alps*ms[1];
-     R[7][7] =-alps*ms[2];
-     
-     
-   }
-   
-   //---------------------------------------------------------------------------
-   // Compute M and Minv matrices for characteristic transformation
-   //---------------------------------------------------------------------------
-   
-   static
-   void Compute_M(const dealii::Vector<double> &W,
-		  double (&M)[n_components][n_components],
-		  double (&Mi)[n_components][n_components]
-		 )
-   {
-     double r = W[density_component];
-     double p = compute_pressure<double>(W);
-     double c = std::sqrt(gas_gamma*p/r);
-     
-     double g = gas_gamma, g_1 = g-1, r_1=1/r, r2=std::sqrt(r);
-     
-     double u[v_components], u2 = 0;
-     //double bb[v_components];
-     double b[v_components];
-     
-     double alpha = r/c;
-     
-     
-     for(unsigned int i=0; i<v_components; i++)
-     {
-       u[i]=W[i]*r_1;
-       u2+=u[i]*u[i];
-     }
-     
-     for(unsigned int i=0; i<v_components; i++)
-       b[i]=W[magnetic_component+i];
-       //bb[i]=W[magnetic_component+i]*r_2;
-     
-     double H = c*c/(g_1) + u2/2;
-     
-     for(unsigned int i=0; i<n_components; i++)
-       for(unsigned int j=0; j<n_components; j++)
-       {
-	 M[i][j] = 0;
-	 Mi[i][j] = 0;
-       }
-     
-     // Jacobian from conse3rvative to entropy variables
-     M[0][0]=alpha;
-     M[1][0]=alpha*u[0];
-     M[2][0]=alpha*u[1];
-     M[3][0]=alpha*u[2];
-     M[4][0]=alpha*H;
-     
-     M[1][1]=M[2][2]=M[3][3]=r;
-     
-     M[4][1]=r*u[0];
-     M[4][2]=r*u[1];
-     M[4][3]=r*u[2];
-     
-     M[0][4]=-alpha;
-     M[1][4]=-alpha*u[0];
-     M[2][4]=-alpha*u[1];
-     M[3][4]=-alpha*u[2];
-     M[4][4]=-0.5*alpha*u2;
-     
-     M[4][5]=b[0]*r2;
-     M[4][6]=b[1]*r2;
-     M[4][7]=b[2]*r2;
-     
-     M[5][5]=M[6][6]=M[7][7]=r2;
-     
-     // Jacobian from entropy to conservative variables
-     
-     double gb = g_1/(r*c);
-     
-     Mi[0][0]=gb*u2/c;
-     Mi[0][1]=Mi[4][1]=-gb*u[0];
-     Mi[0][2]=Mi[4][2]=-gb*u[1];
-     Mi[0][3]=Mi[4][3]=-gb*u[2];
-     
-     Mi[0][4]=Mi[4][4]=gb;
-     
-     Mi[0][5]=Mi[4][5]=-gb*b[0];
-     Mi[0][6]=Mi[4][6]=-gb*b[1];
-     Mi[0][7]=Mi[4][7]=-gb*b[2];
-     
-     Mi[1][0]=-u[0]/r;
-     Mi[2][0]=-u[1]/r;
-     Mi[3][0]=-u[2]/r;
-     
-     Mi[1][1]=Mi[2][2]=Mi[3][3]=1/r;
-     
-     Mi[4][0]=gb*(u2-H);
-     
-     Mi[5][5]=Mi[6][6]=Mi[7][7]=1/r2;
-   }
-   
-   
-   //------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------
    // Eigensystem from F. Li
    //------------------------------------------------------------------------------
    static
@@ -2374,7 +2109,7 @@ struct MHDEquations
 	     bx=bmx/sqrt(rho),
 	     b2=bm2/rho;
  
-      double ca=abs(bx),
+      double ca=fabs(bx),
 	     cf=sqrt(0.5*(a2+b2+sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx))),
 	     cs=sqrt(0.5*(a2+b2-sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx)));
 
@@ -2400,11 +2135,11 @@ struct MHDEquations
       }
       
       double tmp1, alf, als;
-      if((tmp>bm2*1.0e-12)||(abs(gas_gamma*pp-bmx*bmx)>gas_gamma*pp*1.0e-12))
+      if((tmp>bm2*1.0e-12)||(fabs(gas_gamma*pp-bmx*bmx)>gas_gamma*pp*1.0e-12))
       {
 	tmp1=cf*cf-cs*cs;
-	alf=sqrt(abs((a2-cs*cs)/tmp1));
-	als=sqrt(abs((cf*cf-a2)/tmp1));
+	alf=sqrt(fabs((a2-cs*cs)/tmp1));
+	als=sqrt(fabs((cf*cf-a2)/tmp1));
       }
       else
       {
@@ -2596,7 +2331,7 @@ struct MHDEquations
 	     bx=bmx/sqrt(rho),
 	     b2=bm2/rho;
  
-      double ca=abs(bx),
+      double ca=fabs(bx),
 	     cf=sqrt(0.5*(a2+b2+sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx))),
 	     cs=sqrt(0.5*(a2+b2-sqrt((a2+b2)*(a2+b2)-4*a2*bx*bx)));
 
@@ -2622,11 +2357,11 @@ struct MHDEquations
       }
       
       double tmp1, alf, als;
-      if((tmp>bm2*1.0e-12)||(abs(gas_gamma*pp-bmx*bmx)>gas_gamma*pp*1.0e-12))
+      if((tmp>bm2*1.0e-12)||(fabs(gas_gamma*pp-bmx*bmx)>gas_gamma*pp*1.0e-12))
       {
 	tmp1=cf*cf-cs*cs;
-	alf=sqrt(abs((a2-cs*cs)/tmp1));
-	als=sqrt(abs((cf*cf-a2)/tmp1));
+	alf=sqrt(fabs((a2-cs*cs)/tmp1));
+	als=sqrt(fabs((cf*cf-a2)/tmp1));
       }
       else
       {
@@ -2793,8 +2528,6 @@ struct MHDEquations
    // Left and right eigenvector matrices
    // MLx, MRx = along x direction
    // MLy, MRy = along y direction
-   // Expressions taken from
-   // http://people.nas.nasa.gov/~pulliam/Classes/New_notes/euler_notes.pdf
    // Note: This is implemented only for 2-D
    //---------------------------------------------------------------------------
    static
@@ -2809,75 +2542,8 @@ struct MHDEquations
      compute_Rx_Lx(W,MRx,MLx);
      compute_Ry_Ly(W,MRy,MLy);
      
-     // From Jameson's paper
-     //double M[n_components][n_components], Mi[n_components][n_components];
-     //Compute_M(W,M,Mi);
-     
-     /*double nx[v_components], ny[v_components];
-     nx[0]=1;nx[1]=nx[2]=0;
-     ny[1]=1;ny[0]=ny[2]=0;
-     
-     double Rx[n_components][n_components],Ry[n_components][n_components];//*/
-     
-     // From Jameson's paper
-     //Compute_R(W,Rx,nx);
-     //Compute_R(W,Ry,ny);
-     
-     /*for(unsigned int i=0; i<n_components;i++)
-     {
-       for(unsigned int j=0; j<n_components;j++)
-       {
-	 MRx[i][j] = 0;
-	 MRy[i][j] = 0;
-	 MLx[i][j] = 0;
-	 MLy[i][j] = 0;
-	 for(unsigned int k=0; k<n_components;k++)
-	 {
-	   MRx[i][j] += M[i][k]*Rx[k][j];
-	   MRy[i][j] += M[i][k]*Ry[k][j];
-	   MLx[i][j] += Rx[k][i]*Mi[k][j];
-	   MLy[i][j] += Ry[k][i]*Mi[k][j];
-	 }
-       }
-     }//*/
-     
    }
-   
-   static
-   void compute_eigen_matrix (const dealii::Vector<double> &W,
-                              double            (&MR)[n_components][n_components],
-                              double            (&ML)[n_components][n_components])
-   {
-      
-      double u    = W[0] / W[density_component];
-      double v    = W[1] / W[density_component];
-      double theta= atan2(v,u);
-      double kx   = cos(theta);
-      double ky   = sin(theta);
-      
-      double n[v_components];
-      n[0]=kx; n[1]=ky; n[2]=0;
-      
-      double M[n_components][n_components], Mi[n_components][n_components];
-      Compute_M(W,M,Mi);
-      double R[n_components][n_components];
-      Compute_R(W,R,n);
-      
-     for(unsigned int i=0; i<n_components;i++)
-     {
-       for(unsigned int j=0; j<n_components;j++)
-       {
-	 MR[i][j] = 0;
-	 ML[i][j] = 0;
-	 for(unsigned int k=0; k<n_components;k++)
-	 {
-	   MR[i][j] += M[i][k]*R[k][j];
-	   ML[i][j] += R[k][i]*Mi[k][j];
-	 }
-       }
-     }
-     
-   }
+  
    
    //---------------------------------------------------------------------------
    // convert from conserved to characteristic variables: W = L*W
@@ -2925,7 +2591,7 @@ struct MHDEquations
       }
       
    }
-   
+
    // @sect4{EulerEquations::compute_normal_flux}
    
    // On the boundaries of the
@@ -2980,13 +2646,86 @@ struct MHDEquations
       // Dissipation flux
       
       for (unsigned int c=0; c<n_components; ++c)
-         normal_flux[c] += 0.5 * lambda  * (Wplus[c] - Wminus[c]);
+         normal_flux[c] += 0.5 * lambda  * (Wplus[c] - Wminus[c]);//*/
+	 
+      /*typedef typename InputVector::value_type number;
+
+      // Normal velocity
+      number vdotn_plus=0, vdotn_minus=0, bdotn_plus=0, bdotn_minus=0;
+      
+      for(unsigned int d=0; d<dim; ++d)
+      {
+         vdotn_plus  += Wplus[d]  * normal[d];
+         vdotn_minus += Wminus[d] * normal[d];
+	 bdotn_plus  += Wplus[magnetic_component+d]  * normal[d];
+         bdotn_minus += Wminus[magnetic_component+d] * normal[d];
+      }
+      
+      vdotn_plus  /= Wplus [density_component];
+      vdotn_minus /= Wminus[density_component];
+      
+      // pressure
+      number p_plus, p_minus, mp_plus, mp_minus;
+
+      p_plus  = compute_pressure<number> (Wplus);
+      mp_plus = compute_magnetic_pressure<number> (Wplus);
+      p_minus = compute_pressure<number> (Wminus);
+      mp_minus = compute_magnetic_pressure<number> (Wminus);
+      
+      // Maximum eigenvalue at cell face
+      number lambda_plus = max_eigenvalue_normal (Aplus, normal);
+      number lambda_minus = max_eigenvalue_normal (Aminus, normal);
+      number lambda = std::max(lambda_plus, lambda_minus);
+      if(isnan(lambda))
+ 	std::cout<<"\n\t Lambda NaN";
+      
+      // Momentum flux
+      number normal_p[v_components];
+      for(unsigned int d=0;d<dim;d++)
+	normal_p[d] =normal[d];
+      normal_p[dim]=0;
+
+      for (unsigned int i=0; i<v_components; ++i)
+      {
+            normal_flux[i] = 0.5 * ( (p_plus+mp_plus)*normal_p[i] + Wplus[i]*vdotn_plus
+				- Wplus[magnetic_component+i]*bdotn_plus +
+				(p_minus+mp_minus) * normal_p[i] + Wminus[i]*vdotn_minus
+				- Wminus[magnetic_component+i]*bdotn_minus);
+      }
+      
+      // Magnetic flux
+      for (unsigned int i=0; i<v_components; ++i)
+      {
+	normal_flux[magnetic_component+i] = 0.5*(vdotn_plus * Wplus[magnetic_component+i] -
+					    Wplus[momentum_component+i] * bdotn_plus/Wplus[density_component] +
+					    vdotn_minus * Wminus[magnetic_component+i]) -
+					    Wminus[momentum_component+i] * bdotn_minus/Wminus[density_component];
+      }
+
+      // Density flux
+      normal_flux[density_component] = 0.5 * (Wplus [density_component] * vdotn_plus +
+                                              Wminus[density_component] * vdotn_minus);
+      
+      // Energy flux
+      number udotBplus = 0, udotBminus=0;
+      for (unsigned int i=0; i<v_components;++i)
+      {
+	udotBplus += Wplus[momentum_component+i] * Wplus[magnetic_component+i];
+	udotBminus += Wminus[momentum_component+i] * Wminus[magnetic_component+i];
+      }
+      udotBplus/=Wplus[density_component];
+      udotBminus/=Wminus[density_component];
+      
+      normal_flux[energy_component] = 0.5*(vdotn_plus*(Wplus[energy_component] + p_plus + mp_plus)
+                                      - bdotn_plus*udotBplus
+				      + vdotn_minus*(Wminus[energy_component] + p_minus + mp_minus)
+                                      - bdotn_minus*udotBminus);
+      
+      
+      // Dissipation flux
+      for (unsigned int c=0; c<n_components; ++c)
+         normal_flux[c] += 0.5 * lambda * (Wplus[c] - Wminus[c]);//*/
    }
-   
-   
-   // --------------------------------------------------------------------------
-   // Roe logaritmic average
-   // --------------------------------------------------------------------------
    
    template <typename Number>
    static Number logavg(Number left,
@@ -3041,6 +2780,7 @@ struct MHDEquations
      }
    
    }
+   
    
    // --------------------------------------------------------------------------
    // Entropy stable numerical flux by Chandrashekar and Klingenberg
@@ -3152,16 +2892,16 @@ struct MHDEquations
    cf2 = 0.5*(a*a + mbb2) + 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
    cs2 = 0.5*(a*a + mbb2) - 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
    cf = sqrt(cf2);
-   cs = sqrt(abs(cs2)); // cs may be zero or close to zero
+   cs = sqrt(fabs(cs2)); // cs may be zero or close to zero
    
-   alpf = sqrt( abs((a*a - cs2)/(cf2 - cs2)) );
-   alps = sqrt( abs((cf2 - a*a)/(cf2 - cs2)) );
+   alpf = sqrt( fabs((a*a - cs2)/(cf2 - cs2)) );
+   alps = sqrt( fabs((cf2 - a*a)/(cf2 - cs2)) );
    
    // vector nperp
-   ff = abs(mbb2 - bn*bn);
+   ff = fabs(mbb2 - bn*bn);
    if(ff < 1.0e-10)
    {
-      if(abs(normal[1]) < 1.0e-14)
+      if(fabs(normal[1]) < 1.0e-14)
       {
          np1 = 0.0;
          np2 = 1.0/sqrt(2.0);
@@ -3327,14 +3067,14 @@ struct MHDEquations
       }
    }
    
-   Lambda[0] = abs(unorm);
-   Lambda[1] = abs(unorm);
-   Lambda[2] = abs(unorm-bn);
-   Lambda[3] = abs(unorm+bn);
-   Lambda[4] = abs(unorm-cf);
-   Lambda[5] = abs(unorm+cf);
-   Lambda[6] = abs(unorm-cs);
-   Lambda[7] = abs(unorm+cs);
+   Lambda[0] = fabs(unorm);
+   Lambda[1] = fabs(unorm);
+   Lambda[2] = fabs(unorm-bn);
+   Lambda[3] = fabs(unorm+bn);
+   Lambda[4] = fabs(unorm-cf);
+   Lambda[5] = fabs(unorm+cf);
+   Lambda[6] = fabs(unorm-cs);
+   Lambda[7] = fabs(unorm+cs);
 
    // Compute z
    computez(R, left,  zl);
@@ -3363,7 +3103,7 @@ struct MHDEquations
    
    }
    
-   // --------------------------------------------------------------------------
+      // --------------------------------------------------------------------------
    // Entropy stable numerical flux by Chandrashekar and Klingenberg
    // using cell averages for the dissipation matrix
    // --------------------------------------------------------------------------
@@ -3487,16 +3227,16 @@ struct MHDEquations
    cf2 = 0.5*(a*a + mbb2) + 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
    cs2 = 0.5*(a*a + mbb2) - 0.5*sqrt( (a*a+mbb2)*(a*a+mbb2) - 4.0*a*a*bn*bn);
    cf = sqrt(cf2);
-   cs = sqrt(abs(cs2)); // cs may be zero or close to zero
+   cs = sqrt(fabs(cs2)); // cs may be zero or close to zero
    
-   alpf = sqrt( abs((a*a - cs2)/(cf2 - cs2)) );
-   alps = sqrt( abs((cf2 - a*a)/(cf2 - cs2)) );
+   alpf = sqrt( fabs((a*a - cs2)/(cf2 - cs2)) );
+   alps = sqrt( fabs((cf2 - a*a)/(cf2 - cs2)) );
    
    // vector nperp
-   ff = abs(mbb2 - bn*bn);
+   ff = fabs(mbb2 - bn*bn);
    if(ff < 1.0e-10)
    {
-      if(abs(normal[1]) < 1.0e-14)
+      if(fabs(normal[1]) < 1.0e-14)
       {
          np1 = 0.0;
          np2 = 1.0/sqrt(2.0);
@@ -3668,18 +3408,18 @@ struct MHDEquations
    
    number umnorm= um[0]*normal[0] + um[1]*normal[1];
    
-   Lambda[0] = abs(umnorm);
-   Lambda[1] = abs(umnorm);
-   Lambda[2] = abs(umnorm-bn);
-   Lambda[3] = abs(umnorm+bn);
-   Lambda[4] = abs(umnorm-cf);
-   Lambda[5] = abs(umnorm+cf);
-   Lambda[6] = abs(umnorm-cs);
-   Lambda[7] = abs(umnorm+cs);
-   
+   Lambda[0] = fabs(umnorm);
+   Lambda[1] = fabs(umnorm);
+   Lambda[2] = fabs(umnorm-bn);
+   Lambda[3] = fabs(umnorm+bn);
+   Lambda[4] = fabs(umnorm-cf);
+   Lambda[5] = fabs(umnorm+cf);
+   Lambda[6] = fabs(umnorm-cs);
+   Lambda[7] = fabs(umnorm+cs);
+
    // Rusanov flux
-   /*number Lambda_max=std::max(abs(unorm)+abs(bn),abs(unorm)+abs(cf));
-   Lambda_max=std::max(Lambda_max, abs(unorm)+abs(cs));
+   /*number Lambda_max=std::max(ffabs(unorm)+ffabs(bn),ffabs(unorm)+ffabs(cf));
+   Lambda_max=std::max(Lambda_max, ffabs(unorm)+ffabs(cs));
    Lambda[0]=Lambda[1]=Lambda[2]=Lambda[3]=Lambda[4]=Lambda[5]=Lambda[6]=Lambda[7]=Lambda_max;//*/
 
    // Compute z
@@ -3708,8 +3448,6 @@ struct MHDEquations
    normal_flux[7] = flux[4];
    
    }
-   
-   
    
    // --------------------------------------------------------------------------
    // Steger-Warming flux
@@ -4166,7 +3904,7 @@ struct MHDEquations
    class Postprocessor : public dealii::DataPostprocessor<dim>
    {
    public:
-      Postprocessor (const bool do_schlieren_plot);
+      Postprocessor (const bool do_schlieren_plot, const bool do_mach_plot);
       
       virtual
       void
@@ -4190,6 +3928,7 @@ struct MHDEquations
       
    private:
       const bool do_schlieren_plot;
+      const bool do_mach_plot;
    };
 };
 

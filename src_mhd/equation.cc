@@ -189,9 +189,10 @@ const double MHDEquations<dim>::gas_gamma = 5.0/3.0;
 
 template <int dim>
 MHDEquations<dim>::Postprocessor::
-Postprocessor (const bool do_schlieren_plot)
+Postprocessor (const bool do_schlieren_plot, const bool do_mach_plot)
 		:
-		do_schlieren_plot (do_schlieren_plot)
+		do_schlieren_plot (do_schlieren_plot),
+		do_mach_plot(do_mach_plot)
 {}
 
 template <int dim>
@@ -225,16 +226,30 @@ compute_derived_quantities_vector (const std::vector<Vector<double> >           
    for (unsigned int q=0; q<n_quadrature_points; ++q)
    {
       const double density = uh[q](density_component);
+      const double pressure = compute_pressure<double> (uh[q]);;
       
       for (unsigned int d=0; d<dim; ++d)
          computed_quantities[q](d) = uh[q](d) / density;
       
-      computed_quantities[q](dim) = compute_pressure<double> (uh[q]);
+      computed_quantities[q](dim) = pressure;
       computed_quantities[q](dim+1) = duh[q][magnetic_component][0] +
                                       duh[q][magnetic_component+1][1];
+      int adds = 1;
       if (do_schlieren_plot == true)
-         computed_quantities[q](dim+2) = duh[q][density_component] *
+      {
+	adds+=1;
+        computed_quantities[q](dim+adds) = duh[q][density_component] *
                                          duh[q][density_component];
+      }
+      if (do_mach_plot == true)
+      {
+	adds+=1;
+	computed_quantities[q](dim+adds)=0;
+	const double cs=gas_gamma*pressure/density;
+	for(unsigned int d=0; d<2; ++d)
+         computed_quantities[q](dim+adds) += computed_quantities[q](d)*computed_quantities[q](d);
+	computed_quantities[q](dim+adds)=sqrt(computed_quantities[q](dim+adds)/cs);
+      }
    }
 }
 
@@ -256,7 +271,9 @@ MHDEquations<dim>::Postprocessor::get_names () const
 
   if (do_schlieren_plot == true)
     names.push_back ("schlieren_plot");
-
+  if (do_mach_plot == true)
+    names.push_back ("mach_plot");
+  
   return names;
 }
 
@@ -276,6 +293,9 @@ MHDEquations<dim>::Postprocessor::get_data_component_interpretation () const
 			    component_is_scalar);
 
   if (do_schlieren_plot == true)
+    interpretation.push_back (DataComponentInterpretation::
+			      component_is_scalar);
+  if (do_mach_plot == true)
     interpretation.push_back (DataComponentInterpretation::
 			      component_is_scalar);
 
@@ -300,10 +320,15 @@ template <int dim>
 unsigned int
 MHDEquations<dim>::Postprocessor::n_output_variables () const
 {
+  int num_var=dim+2;
   if (do_schlieren_plot == true)
-    return dim+3;
-  else
-    return dim+2;
+    num_var+=1;
+//     return dim+3;
+//   else
+//     return dim+2;
+  if (do_mach_plot == true)
+    num_var+=1;
+  return num_var;
 }
 
 

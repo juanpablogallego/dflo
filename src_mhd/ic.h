@@ -102,6 +102,8 @@ public:
    AlfvenWaves () : dealii::Function<dim>(MHDEquations<dim>::n_components){}
    virtual void vector_value (const dealii::Point<dim>  &p,
                               dealii::Vector<double>  &values) const;
+   double value(const Point<dim> &p,
+                const unsigned int component=6) const;
 };
 
 //------------------------------------------------------------------------
@@ -116,6 +118,29 @@ public:
                               dealii::Vector<double>  &values) const;
 };
 
+//------------------------------------------------------------------------
+// Rotor MHD
+//------------------------------------------------------------------------
+template <int dim>
+class Rotor_MHD : public dealii::Function<dim>
+{
+public:
+   Rotor_MHD () : dealii::Function<dim>(MHDEquations<dim>::n_components){}
+   virtual void vector_value (const dealii::Point<dim>  &p,
+                              dealii::Vector<double>  &values) const;
+};
+
+//------------------------------------------------------------------------
+// Rotated shock tube
+//------------------------------------------------------------------------
+template <int dim>
+class Rotated_Shock_tube : public dealii::Function<dim>
+{
+public:
+   Rotated_Shock_tube () : dealii::Function<dim>(MHDEquations<dim>::n_components){}
+   virtual void vector_value (const dealii::Point<dim>  &p,
+                              dealii::Vector<double>  &values) const;
+};
 
 //------------------------------------------------------------------------
 // Keplerian Disk TODO TO BE COMPLETED

@@ -139,6 +139,59 @@ void AlfvenWaves<dim>::vector_value (const Point<dim> &p,
 }
 
 //--------------------------------------------------------------------------------------------
+// Initial condition for Polarized Alfven  waves.
+// This is setup for 2-d case only
+//--------------------------------------------------------------------------------------------
+template <int dim>
+double AlfvenWaves<dim>::value (const Point<dim> &p,
+                                const unsigned int component) const
+{
+   double theta = std::atan(0.5);
+   const double gamma = MHDEquations<dim>::gas_gamma;
+   double a_2pix1 = 2*M_PI*(p[0]*std::cos(theta) + p[1]*std::sin(theta));
+   // Parallel (p) and Orthogonal (o) Variables
+   double Bp=1.0,
+	  Bo=0.1*std::sin(a_2pix1),
+	  Vp=0.0,
+	  Vo=0.1*std::sin(a_2pix1);
+   // Cartesian coordinates
+   double rho = 1.0, pre = 0.1,
+	  vex = Vp*std::cos(theta) - Vo*std::sin(theta),
+	  vey = Vp*std::sin(theta) + Vo*std::cos(theta),
+	  vez = 0.1*std::cos(a_2pix1),
+	  bx  = Bp*std::cos(theta) - Bo*std::sin(theta),
+	  by  = Bp*std::sin(theta) + Bo*std::cos(theta),
+	  bz  = 0.1*std::cos(a_2pix1);
+   switch(component)
+   {
+     case 0:
+       return rho * vex;
+       break;
+     case 1:
+       return rho * vey;
+       break;
+     case 2:
+       return rho * vez;
+       break;
+     case 3:
+       return bx;
+       break;
+     case 4:
+       return by;
+       break;
+     case 5:
+       return bz;
+       break;
+     case 6:
+       return rho;
+       break;
+     case 7:
+       return pre/(gamma-1.0) + 0.5 * rho * (vex*vex + vey*vey + vez*vez) + 0.5 * (bx*bx + by*by + bz*bz);
+       break;
+   }
+}
+
+//--------------------------------------------------------------------------------------------
 // Initial condition for the Orszag-Tang vortex.
 // This is setup for 2-d case only
 //--------------------------------------------------------------------------------------------
@@ -156,6 +209,74 @@ void Orszag_Tang_vortex<dim>::vector_value (const Point<dim> &p,
 	  bx  = -sqpi4*std::sin(2*M_PI*p[1]),
 	  by  = sqpi4*std::sin(4*M_PI*p[0]),
 	  bz  = 0;
+   
+   values[MHDEquations<dim>::momentum_component]   = rho * vex;
+   values[MHDEquations<dim>::momentum_component+1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component+2] = rho * vez;
+   values[MHDEquations<dim>::magnetic_component]   = bx;
+   values[MHDEquations<dim>::magnetic_component+1] = by;
+   values[MHDEquations<dim>::magnetic_component+2] = bz;
+   values[MHDEquations<dim>::density_component]    = rho;
+   values[MHDEquations<dim>::energy_component]     = pre/(gas_gamma-1)
+						     + 0.5 * rho * (vex*vex + vey*vey + vez*vez)
+						     + 0.5 * (bx*bx + by*by + bz*bz);
+}
+
+//--------------------------------------------------------------------------------------------
+// Initial condition for the Rotor_MHD.
+// This is setup for 2-d case only
+//--------------------------------------------------------------------------------------------
+template <int dim>
+void Rotor_MHD<dim>::vector_value (const Point<dim> &p,
+                                      Vector<double>   &values) const
+{
+   const double gas_gamma = MHDEquations<dim>::gas_gamma;
+   double r0=0.1, r1= 0.115, r=sqrt((p[0]-0.5)*(p[0]-0.5)+(p[1]-0.5)*(p[1]-0.5)),
+	  u0=2, vex=0, vey=0, vez=0, bx=5/sqrt(4*M_PI), by=0, bz=0,
+	  pre=1, rho=1;
+   if(r<r0)
+   {
+     rho=10;
+     vex=-u0*(p[1]-0.5)/r0;
+     vey=u0*(p[0]-0.5)/r0;
+   }
+   else if((r>r0)&&(r<r1))
+   {
+     double f=(r1-r)/(r1-r0);
+     rho=1+9*f;
+     vex=-u0*f*(p[1]-0.5)/r;
+     vey=u0*f*(p[0]-0.5)/r;
+   }
+   
+   values[MHDEquations<dim>::momentum_component]   = rho * vex;
+   values[MHDEquations<dim>::momentum_component+1] = rho * vey;
+   values[MHDEquations<dim>::momentum_component+2] = rho * vez;
+   values[MHDEquations<dim>::magnetic_component]   = bx;
+   values[MHDEquations<dim>::magnetic_component+1] = by;
+   values[MHDEquations<dim>::magnetic_component+2] = bz;
+   values[MHDEquations<dim>::density_component]    = rho;
+   values[MHDEquations<dim>::energy_component]     = pre/(gas_gamma-1)
+						     + 0.5 * rho * (vex*vex + vey*vey + vez*vez)
+						     + 0.5 * (bx*bx + by*by + bz*bz);
+}
+
+//--------------------------------------------------------------------------------------------
+// Initial condition for the Rotated_Shock_tube.
+// This is setup for 2-d case only
+//--------------------------------------------------------------------------------------------
+template <int dim>
+void Rotated_Shock_tube<dim>::vector_value (const Point<dim> &p,
+                                      Vector<double>   &values) const
+{
+   const double gas_gamma = MHDEquations<dim>::gas_gamma;
+   double r=p[0]+p[1],
+	  vex=10, vey=0, vez=0, bx=5/sqrt(4*M_PI), by=5/sqrt(4*M_PI), bz=0,
+	  pre=20, rho=1;
+   if(r>0.5)
+   {
+     pre=1;
+     vex=-10;
+   }
    
    values[MHDEquations<dim>::momentum_component]   = rho * vex;
    values[MHDEquations<dim>::momentum_component+1] = rho * vey;
@@ -225,6 +346,12 @@ void ConservationLaw<dim>::set_initial_condition_Qk ()
    else if(parameters.ic_function == "orszag")
       VectorTools::interpolate(mapping(), dof_handler,
                                Orszag_Tang_vortex<dim>(), old_solution);
+   else if(parameters.ic_function == "rotormhd")
+      VectorTools::interpolate(mapping(), dof_handler,
+                               Rotor_MHD<dim>(), old_solution);
+   else if(parameters.ic_function == "rshtube")
+      VectorTools::interpolate(mapping(), dof_handler,
+                               Rotated_Shock_tube<dim>(), old_solution);
    else
       VectorTools::interpolate(mapping(), dof_handler,
                                parameters.initial_conditions, old_solution);
@@ -245,6 +372,8 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
    VortexSystem<dim> vortex_system;
    AlfvenWaves<dim> alfven;
    Orszag_Tang_vortex<dim> orszag;
+   Rotor_MHD<dim> rotormhd;
+   Rotated_Shock_tube<dim> rshtube;
    Function<dim>* ic_function;
    if(parameters.ic_function == "rt")
       ic_function = &rayleigh_taylor;
@@ -256,6 +385,10 @@ void ConservationLaw<dim>::set_initial_condition_Pk ()
       ic_function = &alfven;
    else if(parameters.ic_function == "orszag")
       ic_function = &orszag;
+   else if(parameters.ic_function == "rotormhd")
+      ic_function = &rotormhd;
+   else if(parameters.ic_function == "rshtube")
+      ic_function = &rshtube;
    else
       ic_function = &parameters.initial_conditions;
 

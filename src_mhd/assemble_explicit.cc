@@ -479,6 +479,7 @@ void ConservationLaw<dim>::integrate_face_term_explicit
    typedef double PowellCoef[MHDEquations<dim>::n_components];
    PowellCoef *powellcoef = new PowellCoef[n_q_points];
    PowellCoef *powellcoef_n = new PowellCoef[n_q_points];
+   double deltaB = 0;//*/
    
    // Wminus is Neighbouring cell value
    for (unsigned int q=0; q<n_q_points; ++q)
